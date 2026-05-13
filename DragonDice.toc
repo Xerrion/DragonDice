@@ -1,0 +1,26 @@
+## Interface: 120005
+## Title: DragonDice
+## Notes: Chat-driven 1v1 deathroller. First DragonCore consumer.
+## Author: Xerrion
+## Version: @project-version@
+## X-Category: Miscellaneous
+## X-License: MIT
+## Dependencies: DragonCore
+## SavedVariables: DragonDiceDB
+
+# Lifecycle wiring + locale proxy resolution.
+Core.lua
+
+# Locale content (registered after Core resolves the proxy).
+Locale\enUS.lua
+
+# Pure modules (no DragonCore deps).
+Modules\FSM.lua
+Modules\RollParser.lua
+Modules\BetParser.lua
+Modules\Announce.lua
+
+# Stateful modules (depend on the pure ones above).
+Modules\Game.lua
+Modules\Chat.lua
+Modules\Slash.lua

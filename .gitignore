@@ -1,0 +1,12 @@
+# Orchestration scratchpad
+.deliverables/
+
+# Packager output
+.release/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
