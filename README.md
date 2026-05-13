@@ -30,8 +30,8 @@ Whispers are intentionally not accepted.
 1. Host: `/dr open 100`
 2. Opponent (in /p, /raid, or /say): `!join`
 3. Host: `/dr start`
-4. Host rolls: `/roll 1-1000`
-5. Players alternate `/roll 1-<currentMax>` until someone rolls a 1.
+4. Host rolls: `/roll 1000`
+5. Players alternate `/roll <currentMax>` until someone rolls a 1.
 6. The roller of the 1 loses; the addon announces the winner and payout.
 
 Payout is announcement-only ("Loser pays the bet") - no trade automation.

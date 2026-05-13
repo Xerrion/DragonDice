@@ -197,7 +197,7 @@ function M:Start()
 
     state.fsm:To("ACTIVE")
     state.currentTurn = "host"
-    announce("DragonDice: %s vs %s for %dg. %s rolls first: /roll 1-%d",
+    announce("DragonDice: %s vs %s for %dg. %s rolls first: /roll %d",
         state.host, state.opponent, state.bet, state.host, state.currentMax)
     return true
 end
@@ -260,7 +260,7 @@ function M:OnRoll(record)
     state.currentMax = rollN
     state.currentTurn = nextTurn()
     local nextName = nameForSlot(state.currentTurn)
-    announce("DragonDice: %s rolled %d. %s, /roll 1-%d",
+    announce("DragonDice: %s rolled %d. %s, /roll %d",
         shortName(player), rollN, nextName, state.currentMax)
     return true
 end

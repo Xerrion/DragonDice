@@ -30,8 +30,8 @@ DragonCore.Locale:Register({ name = ADDON_NAME }, "enUS", {
     -- Lobby / match announcements (broadcast).
     ["DragonDice: %s is hosting a deathroll for %dg. Type !join to play."] = true,
     ["DragonDice: %s has joined the deathroll vs %s. Host: /dr start to begin."] = true,
-    ["DragonDice: %s vs %s for %dg. %s rolls first: /roll 1-%d"] = true,
-    ["DragonDice: %s rolled %d. %s, /roll 1-%d"] = true,
+    ["DragonDice: %s vs %s for %dg. %s rolls first: /roll %d"] = true,
+    ["DragonDice: %s rolled %d. %s, /roll %d"] = true,
     ["DragonDice: %s rolled 1 and loses. %s wins %dg. Loser pays the bet."] = true,
     ["DragonDice: %s cancelled the deathroll."] = true,
 
