@@ -12,8 +12,26 @@ local LibStub = LibStub
 local DragonCore = LibStub("DragonCore-1.0")
 
 local Ambiguate = Ambiguate
+local DEFAULT_CHAT_FRAME = DEFAULT_CHAT_FRAME
 
 ns.ADDON_NAME = ADDON_NAME
+
+-- Public helper: route a host-local string to the player's default chat
+-- frame. Single sink so future routing (toast frame, options-panel log) is a
+-- one-line change. Modules call this for all non-broadcast user messages.
+---@param text string
+function ns.PrintLocal(text)
+    if type(text) ~= "string" or text == "" then return end
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage(text)
+    end
+end
+
+-- Expose DragonCore.Schedule on the private namespace so modules can call it
+-- without re-resolving LibStub. Keeps Modules/ load-order independent of the
+-- LibStub global presence (notably: pure-Lua headless tests inject their own
+-- stub on `ns.Schedule` before loading Game.lua).
+ns.Schedule = DragonCore.Schedule
 
 -- Public helper: short-form player name (strip realm) for cross-realm hosts.
 -- Mirrors the orchestrator constraint of Ambiguate(name, "short") only; no

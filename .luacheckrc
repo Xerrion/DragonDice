@@ -29,6 +29,7 @@ read_globals = {
     "IsInGroup",
     "IsInRaid",
     "LE_PARTY_CATEGORY_INSTANCE",
+    "DEFAULT_CHAT_FRAME",
 }
 
 globals = {

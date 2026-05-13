@@ -33,6 +33,22 @@ local M = {}
 -- share a single implementation. Aliased locally for hot-path readability.
 local shortName = ns.GetShortName
 
+-- Lobby join-timer constants. `TIMER_SECONDS` is the fixed open-to-start
+-- countdown (out-of-scope to make configurable per ADR). `MIN_PLAYERS` names
+-- the auto-start floor; in the current 1v1 model it reduces to "opponent
+-- slot is filled" but the constant earns its place for the eventual N-player
+-- refactor. Countdown announcement schedule (seconds-elapsed -> remaining):
+-- {5->10, 10->5, 12->3, 13->2, 14->1}; terminal transition at TIMER_SECONDS.
+local TIMER_SECONDS = 15
+local MIN_PLAYERS = 2
+local COUNTDOWN_POINTS = {
+    { at = 5,  remaining = 10 },
+    { at = 10, remaining = 5  },
+    { at = 12, remaining = 3  },
+    { at = 13, remaining = 2  },
+    { at = 14, remaining = 1  },
+}
+
 -- Internal helper: route a localised, formatted string out via Announce.
 local function announce(template, ...)
     local L = ns.L
@@ -43,21 +59,20 @@ local function announce(template, ...)
     end
 end
 
--- Internal helper: print a warning to the host's chat frame ONLY. Never
--- broadcast. Used for invalid-roll warnings that still need surfacing so the
--- host knows why the game did not advance.
-local function warn(template, ...)
+-- Internal helper: emit a localised, formatted line to the host's chat frame
+-- ONLY. Never broadcast. Single sink via `ns.PrintLocal` (see Core.lua);
+-- falls through to `print` only when the seam is missing (defensive - this
+-- should never happen at runtime, but keeps headless smoke tests honest).
+local function tellHost(template, ...)
     local L = ns.L
     local resolved = L and L[template] or template
     if select("#", ...) > 0 then resolved = string_format(resolved, ...) end
-    print(resolved)
+    if ns.PrintLocal then ns.PrintLocal(resolved) else print(resolved) end
 end
 
--- Internal helper: print a localised line to the host's chat frame (status,
--- usage, errors). Same routing as warn(); separate name for intent.
-local function tellHost(template, ...)
-    warn(template, ...)
-end
+-- Alias: `warn` is the legacy name for invalid-roll severity; same routing
+-- as `tellHost`, separate name to preserve call-site intent.
+local warn = tellHost
 
 -------------------------------------------------------------------------------
 -- State
@@ -96,6 +111,44 @@ local function clearState()
     state.currentTurn = nil
     state.history = {}
 end
+
+-- Lobby-timer fields. Owned by Game (B1 in the ADR). The lobby-identity
+-- counter is the load-bearing re-entrancy guard: every Schedule callback
+-- captures the open-time value and bails on mismatch, so a late callback
+-- from a cancelled lobby is inert even if its handle was not cancelled in
+-- time. See "Re-entrancy guard" in the join-timer ADR (epoch / generation
+-- counter pattern).
+M._timerHandle = nil
+M._countdownHandles = {}
+M._lobbyId = 0
+
+-- Internal helper: count current participants. In the 1v1 model this is 1
+-- (host only) or 2 (host + opponent). Named for the future N-player refactor.
+local function countParticipants()
+    return state.opponent ~= nil and 2 or 1
+end
+
+-- Internal helper: cancel any scheduled countdown announcements and the
+-- terminal transition. Idempotent. The lobby-identity guard makes a missed
+-- cancel safe-by-default, so this is best-effort cleanup, not the
+-- correctness primitive.
+local function cancelTimers()
+    local handles = M._countdownHandles
+    for i = 1, #handles do
+        local handle = handles[i]
+        if handle and handle.Cancel then handle:Cancel() end
+        handles[i] = nil
+    end
+    if M._timerHandle and M._timerHandle.Cancel then
+        M._timerHandle:Cancel()
+    end
+    M._timerHandle = nil
+end
+
+-- Forward declarations: the schedule helper references `Start`, which is
+-- attached to `M` below.
+local scheduleCountdown
+local expireInsufficient
 
 -- Internal helper: who the next roller should be, given currentTurn.
 local function nextTurn()
@@ -151,6 +204,11 @@ function M:Open(bet, hostName)
         return false
     end
 
+    -- Best-effort cleanup of any leftover handles from a prior lobby. The
+    -- epoch (advanced by Cancel/Reset/Join) is the actual correctness
+    -- primitive; this just keeps the schedule queue tidy.
+    cancelTimers()
+
     -- Reset any prior game (legal from any state).
     state.fsm:Reset()
     clearState()
@@ -162,8 +220,12 @@ function M:Open(bet, hostName)
     state.currentMax = state.startMax
 
     state.fsm:To("OPEN")
-    announce("DragonDice: %s is hosting a deathroll for %dg. Type !join to play.",
-        resolvedHost, bet)
+    -- Open-announce wording is from the joiner's perspective: the 15s
+    -- countdown does not arm until someone joins, but at that point the
+    -- "!start or wait %ds to begin" line is accurate.
+    announce("DragonDice: %s opens a %dg deathroll. Type !join to enter; !start or wait %ds to begin.",
+        resolvedHost, bet, TIMER_SECONDS)
+
     return true
 end
 
@@ -176,11 +238,38 @@ function M:Join(player)
 
     local who = shortName(player)
     if who == state.host then return false end
-    if state.opponent ~= nil then return false end
+    local previousOpponent = state.opponent
+    if previousOpponent ~= nil then return false end
 
     state.opponent = who
     announce("DragonDice: %s has joined the deathroll vs %s. Host: /dr start to begin.",
         who, state.host)
+
+    -- Arm the lobby countdown on the FIRST successful join. In the current
+    -- 1v1 model every accepted Join IS the first (Join rejects when the
+    -- opponent slot is already filled), so this guard is forward-compatible
+    -- scaffolding for an eventual N-player refactor. The epoch lives on the
+    -- countdown, not the lobby: bumping it here ensures any straggler
+    -- callbacks from a prior countdown are inert.
+    if not previousOpponent then
+        M._lobbyId = M._lobbyId + 1
+        local lobbyId = M._lobbyId
+        scheduleCountdown(lobbyId)
+
+        local Schedule = ns.Schedule
+        if Schedule and Schedule.After then
+            M._timerHandle = Schedule:After(TIMER_SECONDS, function()
+                if M._lobbyId ~= lobbyId then return end
+                M._timerHandle = nil
+                if countParticipants() >= MIN_PLAYERS then
+                    M:Start()
+                else
+                    expireInsufficient()
+                end
+            end)
+        end
+    end
+
     return true
 end
 
@@ -191,9 +280,16 @@ function M:Start()
         return false
     end
     if state.opponent == nil then
+        -- Manual-start refusal: keep the lobby OPEN and the join timer
+        -- running. The host can wait for a joiner or `/dr cancel`.
         tellHost("DragonDice: cannot start - need an opponent.")
         return false
     end
+
+    -- Successful manual start (or terminal-callback delegation): silence the
+    -- countdown before announcing the match. The epoch guard would make
+    -- stragglers inert anyway, but explicit cancel keeps chat quiet.
+    cancelTimers()
 
     state.fsm:To("ACTIVE")
     state.currentTurn = "host"
@@ -284,6 +380,8 @@ end
 
 ---Reset to IDLE silently (host-local; no broadcast).
 function M:Reset()
+    M._lobbyId = M._lobbyId + 1
+    cancelTimers()
     if state.fsm then state.fsm:Reset() end
     clearState()
 end
@@ -299,6 +397,8 @@ function M:Cancel()
     -- `state.host` is always set in non-IDLE states (set by :Open). Treated
     -- as opaque player-name data; never substituted with UnitName("player").
     local hostName = state.host
+    M._lobbyId = M._lobbyId + 1
+    cancelTimers()
     announce("DragonDice: %s cancelled the deathroll.", hostName)
     state.fsm:Reset()
     clearState()
@@ -332,6 +432,43 @@ function M._State()
         history = state.history,
     }
 end
+
+-- Schedule the five countdown announcements for this lobby. Each callback
+-- closes over `lobbyId` (captured at Open time) and refuses to fire if the
+-- epoch has advanced. The handles are stored in `M._countdownHandles` so
+-- cancelTimers() can sweep them on manual start / cancel / reset.
+scheduleCountdown = function(lobbyId)
+    local Schedule = ns.Schedule
+    if not Schedule or not Schedule.After then return end
+
+    local handles = M._countdownHandles
+    for i = 1, #COUNTDOWN_POINTS do
+        local point = COUNTDOWN_POINTS[i]
+        local remaining = point.remaining
+        local handle = Schedule:After(point.at, function()
+            if M._lobbyId ~= lobbyId then return end
+            announce("DragonDice: starting in %ds.", remaining)
+        end)
+        handles[#handles + 1] = handle
+    end
+end
+
+-- Terminal timer expiry path: insufficient participants. Host-local notice
+-- only, then return to IDLE. The new epoch from Reset() prevents any
+-- straggler countdown from firing into the dead lobby.
+-- Defensive: only reached if a future N-player refactor arms the timer
+-- before MIN_PLAYERS is met. In the current 1v1 model the timer only arms
+-- after a successful Join, so at terminal time an opponent always exists
+-- and the terminal callback delegates to Start instead.
+expireInsufficient = function()
+    tellHost("DragonDice: not enough players - lobby expired.")
+    M:Reset()
+end
+
+-- Test seams (NOT used in production): introspect the internal countdown
+-- table and trigger the expiry path directly for spec coverage.
+function M._CountdownHandles() return M._countdownHandles end
+function M._LobbyId() return M._lobbyId end
 
 ns.Game = setmetatable(M, { __index = ns.Game or {} })
 
