@@ -1,12 +1,30 @@
-## Interface: 120005
+## Interface: 120005, 50503, 20505, 11508
 ## Title: DragonDice
 ## Notes: Chat-driven 1v1 deathroller. First DragonCore consumer.
 ## Author: Xerrion
 ## Version: @project-version@
 ## X-Category: Miscellaneous
 ## X-License: MIT
-## Dependencies: DragonCore
 ## SavedVariables: DragonDiceDB
+
+# DragonCore library (vendored via submodule; expanded inline because WoW does
+# not support TOC-of-TOC includes)
+Libs\DragonCore\Libs\LibStub\LibStub.lua
+Libs\DragonCore\Core\Subscription.lua
+Libs\DragonCore\Core\Capabilities.lua
+Libs\DragonCore\Core\SecureCall.lua
+Libs\DragonCore\Core\Dispatcher.lua
+Libs\DragonCore\Core\Schedule.lua
+Libs\DragonCore\Core\Listener.lua
+Libs\DragonCore\Core\EventBus.lua
+Libs\DragonCore\Core\Locale.lua
+Libs\DragonCore\Core\AddonChannel\Serializer.lua
+Libs\DragonCore\Core\AddonChannel.lua
+Libs\DragonCore\Core\Store.lua
+Libs\DragonCore\Core\Settings\Renderer_Modern.lua
+Libs\DragonCore\Core\Settings\Settings.lua
+Libs\DragonCore\Core\Lifecycle\Lifecycle.lua
+Libs\DragonCore\Locales\enUS.lua
 
 # Lifecycle wiring + locale proxy resolution.
 Core.lua

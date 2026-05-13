@@ -1,0 +1,15 @@
+package-as: DragonDice
+enable-toc-creation: no
+
+externals:
+  Libs/DragonCore: https://github.com/Xerrion/DragonCore
+
+ignore:
+  - .editorconfig
+  - .git*
+  - .luacheckrc
+  - .luarc.json
+  - .busted
+  - "*.md"
+  - tests
+  - AGENTS.md
