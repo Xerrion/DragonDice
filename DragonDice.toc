@@ -22,6 +22,7 @@ Libs\DragonCore\Core\AddonChannel\Serializer.lua
 Libs\DragonCore\Core\AddonChannel.lua
 Libs\DragonCore\Core\Store.lua
 Libs\DragonCore\Core\Settings\Renderer_Modern.lua
+Libs\DragonCore\Core\Settings\Renderer_Legacy.lua
 Libs\DragonCore\Core\Settings\Settings.lua
 Libs\DragonCore\Core\Lifecycle\Lifecycle.lua
 Libs\DragonCore\Locales\enUS.lua
