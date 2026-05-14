@@ -1,11 +1,15 @@
 --------------------------------------------------------------------------------
 -- Modules/Slash.lua
--- Owns SLASH_DRAGONDICE1 = "/dr" and a small verb dispatch table. The
--- dispatcher is bespoke (rather than riding DragonCore.Settings' built-in
--- `open`/`reset` verbs) because of a semantic collision: our `open` opens a
--- lobby, not an options panel.
+-- Owns SLASH_DRAGONDICE1 = "/dc" and SLASH_DRAGONDICE2 = "/dragondice". The
+-- dispatcher is parse-and-route only: every verb funnels through
+-- `ns.Registry`. Slash never reaches into a specific game module.
 --
--- Verbs: open <bet>, status, reset, cancel.
+-- Grammar (see ADR-0002 §C):
+--   /dc                            -> help
+--   /dc help                       -> help
+--   /dc <verb>                     -> global verb (status | cancel | reset | start)
+--   /dc <game> open <args...>      -> open a lobby for the named game
+--   /dc <game> <verb> [args...]    -> any verb declared in <game>.SlashVerbs
 --
 -- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
@@ -15,7 +19,7 @@ local ADDON_NAME, ns = ...
 local print = print
 local string_lower = string.lower
 local string_format = string.format
-local tonumber = tonumber
+local table_concat = table.concat
 
 local M = {}
 
@@ -27,8 +31,8 @@ local function tellHost(template, ...)
     print(resolved)
 end
 
--- Internal helper: split "verb rest" out of a slash invocation. Empty input
--- yields nil verb (caller prints usage).
+-- Internal helper: split "verb rest" out of an input string. Empty input
+-- yields nil verb (caller prints usage). `rest` is left trimmed.
 local function splitVerb(msg)
     if type(msg) ~= "string" then return nil, "" end
     local trimmed = msg:match("^%s*(.-)%s*$") or ""
@@ -38,85 +42,77 @@ local function splitVerb(msg)
 end
 
 -- Internal helper: short-form name of the local player. Delegates to the
--- shared `ns.GetShortName` (see Core.lua) so host comparisons line up
--- byte-for-byte across modules.
+-- shared `ns.GetShortName` so host comparisons line up byte-for-byte.
 local function localPlayerShortName()
     local UnitName = _G.UnitName
     return ns.GetShortName(UnitName and UnitName("player") or nil)
 end
 
--- Pure name-comparison gate for destructive verbs (cancel | reset). Takes
--- already-normalised short names. The IDLE-state bypass lives in the
--- closure below; this function strictly answers "are these two names the
--- same player?" Returns false when either name is nil so a missing host or
--- a missing local player is never silently treated as a permission grant.
----@param localPlayerName string|nil  Short-form name of the local player.
----@param hostName        string|nil  Short-form name of the current host.
----@return boolean
-function M.CanPlayerAct(localPlayerName, hostName)
-    if type(localPlayerName) ~= "string" or localPlayerName == "" then return false end
-    if type(hostName) ~= "string" or hostName == "" then return false end
-    return localPlayerName == hostName
+-- Internal helper: print the help listing. The "registered games" lines
+-- enumerate via Registry:List so newly added games are listed without a
+-- locale edit.
+local function printHelp()
+    tellHost("DragonDice: usage: /dc <game> open <args> | status | cancel | reset | start")
+    local ids = ns.Registry and ns.Registry:List() or {}
+    if #ids > 0 then
+        tellHost("DragonDice: registered games: %s.", table_concat(ids, ", "))
+    end
 end
 
--- Internal helper: gate destructive verbs (cancel | reset) when a game is
--- in progress and the local player is not the host. Returns true when the
--- caller may proceed; emits a host-local warning and returns false when
--- blocked. IDLE (and pre-Init nil) games have no host yet, so the gate
--- opens.
-local function localPlayerMayActOnHostGame()
-    local Game = ns.Game
-    local fsmState = Game and Game.GetState and Game:GetState() or nil
-    if fsmState == nil or fsmState == "IDLE" then return true end
-    local host = Game and Game.GetHost and Game:GetHost() or nil
-    local me = localPlayerShortName()
-    if M.CanPlayerAct(me, host) then return true end
-    tellHost("DragonDice: only the host (%s) may run that command.", host or "?")
-    return false
-end
-
--- Verb dispatch table. Each handler receives the trimmed argument tail.
--- Closures capture `ns.Game` lazily (via the function call) so module load
--- order between Slash and Game does not matter.
-local DISPATCH = {
-    open = function(arg)
-        local bet = tonumber(arg)
-        if bet == nil then
-            tellHost("DragonDice: bet must be a positive integer.")
-            return
-        end
-        ns.Game:Open(bet, localPlayerShortName())
-    end,
-    status = function() ns.Game:Status() end,
-    reset = function()
-        if not localPlayerMayActOnHostGame() then return end
-        ns.Game:Reset()
-    end,
-    cancel = function()
-        if not localPlayerMayActOnHostGame() then return end
-        ns.Game:Cancel()
-    end,
+-- Global verbs: routed through Registry, which owns active-game derivation
+-- and the host-permission gate.
+local GLOBAL_VERBS = {
+    help   = function() printHelp() end,
+    status = function() ns.Registry:Status() end,
+    cancel = function() ns.Registry:Cancel(localPlayerShortName()) end,
+    reset  = function() ns.Registry:Reset(localPlayerShortName()) end,
+    start  = function() ns.Registry:Start(localPlayerShortName()) end,
 }
 
 local function handler(msg)
     local verb, rest = splitVerb(msg)
     if verb == nil then
-        tellHost("DragonDice: usage: /dr open <bet> | status | reset | cancel")
+        printHelp()
         return
     end
-    local fn = DISPATCH[verb]
+
+    local globalFn = GLOBAL_VERBS[verb]
+    if globalFn then
+        globalFn(rest)
+        return
+    end
+
+    -- Otherwise `verb` is interpreted as a game id.
+    local game = ns.Registry and ns.Registry:Get(verb) or nil
+    if game == nil then
+        tellHost("DragonDice: unknown command '%s'. Try /dc for usage.", verb)
+        return
+    end
+
+    local subVerb, subRest = splitVerb(rest)
+    if subVerb == nil then
+        tellHost("DragonDice: usage: /dc %s open <args>", verb)
+        return
+    end
+
+    if subVerb == "open" then
+        ns.Registry:Open(verb, subRest, localPlayerShortName())
+        return
+    end
+
+    local fn = game.SlashVerbs and game.SlashVerbs[subVerb]
     if fn == nil then
-        tellHost("DragonDice: unknown command '%s'. Try /dr for usage.", verb)
+        tellHost("DragonDice: unknown verb '%s %s'. Try /dc for usage.", verb, subVerb)
         return
     end
-    fn(rest)
+    fn(game, subRest, localPlayerShortName())
 end
 
 ---@param _addon DragonCore.Addon
 function M:Init(_addon)
     -- The two SLASH_<NAME>N globals plus SlashCmdList[<NAME>] are the only
     -- globals this addon writes besides DragonDiceDB.
-    _G.SLASH_DRAGONDICE1 = "/dr"
+    _G.SLASH_DRAGONDICE1 = "/dc"
     _G.SLASH_DRAGONDICE2 = "/dragondice"
     _G.SlashCmdList["DRAGONDICE"] = handler
 end

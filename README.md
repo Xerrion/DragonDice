@@ -15,19 +15,21 @@ and pretending otherwise corrupts the API surface.
 ## MVP commands
 
 ```
-/dr open <bet>    open a deathroll lobby for <bet> gold (positive integer)
-/dr status        print the current game state to your chat frame
-/dr reset         clear local state silently
-/dr cancel        cancel an open or active game and announce it
+/dc deathroll open <bet>  open a deathroll lobby for <bet> gold (positive integer)
+/dc status                print the current game state to your chat frame
+/dc reset                 clear local state silently (host only when a game is active)
+/dc cancel                cancel an open or active game and announce it (host only)
 ```
 
+`/dragondice` is the long-form alias of `/dc`.
+
 Opponents join by typing `!join` in `/p`, `/raid`, instance chat, or `/say`.
-The game starts automatically as soon as an opponent joins. Whispers are
-intentionally not accepted.
+The deathroll starts automatically as soon as an opponent joins. Whispers
+are intentionally not accepted.
 
 ## How a round plays
 
-1. Host: `/dr open 100`
+1. Host: `/dc deathroll open 100`
 2. Opponent (in /p, /raid, or /say): `!join`
 3. Match starts: the host rolls `/roll 1000` automatically.
 4. Players alternate `/roll <currentMax>` until someone rolls a 1.

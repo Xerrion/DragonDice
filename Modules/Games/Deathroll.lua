@@ -1,19 +1,19 @@
 --------------------------------------------------------------------------------
--- Modules/Game.lua
--- The deathroll game: FSM (IDLE -> OPEN -> ACTIVE -> FINISHED) plus the
--- only mutable state in the addon. Slash and Chat call into this module;
--- this module calls Announce. No event subscriptions, no slash registration,
--- no I/O beyond Announce.Send and the host-local warning helper.
+-- Modules/Games/Deathroll.lua
+-- The deathroll game module. FSM (IDLE -> OPEN -> ACTIVE -> FINISHED) plus
+-- the only mutable state in the addon for this game. Slash and Chat reach
+-- this module via `ns.Registry`; this module reaches Announce, the host-
+-- local sink, and (via the registry) self-registers at file load.
 --
--- Per-roll rules:
+-- Per-roll rules (unchanged from ADR-0001's 1v1 contract):
 --   * State must be ACTIVE.
 --   * Roller must be host or opponent.
 --   * Roller must be currentTurn.
 --   * minRoll == 1 and maxRoll == currentMax.
 --   * Valid roll == 1 -> roller loses, other player wins, FINISHED + payout.
 --   * Valid roll > 1 -> currentMax := roll, switch turn, prompt next.
---   * Invalid rolls NEVER mutate state. Severity warnings go to host's chat
---     frame only; never broadcast.
+--   * Invalid rolls NEVER mutate state. Severity warnings go to host's
+--     chat frame only; never broadcast.
 --
 -- Payout is announcement-only: "<winner> wins <bet>g. Loser pays the bet."
 -- No trade automation.
@@ -26,19 +26,27 @@ ns = ns or {}
 
 local print = print
 local string_format = string.format
+local string_match = string.match
+local tonumber = tonumber
+local math_floor = math.floor
 
 local M = {}
 
--- Short-form name helper lives on `ns` (see Core.lua) so Slash and Game
--- share a single implementation. Aliased locally for hot-path readability.
+-- Module identity, surfaced on the registry contract (§A of ADR-0002).
+M.id = "deathroll"
+M.displayName = "Deathroll"
+M.localePrefix = "deathroll"
+
+-- Short-form name helper lives on `ns` (see Core.lua) so routers and
+-- games share a single implementation. Aliased locally for hot-path use.
 local shortName = ns.GetShortName
 
 -- Lobby expiry constants. `TIMER_SECONDS` is the fixed window during which
--- an OPEN lobby will accept a !join; if it elapses with no joiner the lobby
--- is cancelled back to IDLE. Countdown announcement schedule (seconds-
--- elapsed -> remaining): {5->10, 10->5, 12->3, 13->2, 14->1}; terminal
--- expiry at TIMER_SECONDS. Auto-start (the moment an opponent joins) cancels
--- every handle before any of them can fire.
+-- an OPEN lobby will accept a !join; if it elapses with no joiner the
+-- lobby is cancelled back to IDLE. Countdown announcement schedule
+-- (seconds-elapsed -> remaining): {5->10, 10->5, 12->3, 13->2, 14->1};
+-- terminal expiry at TIMER_SECONDS. Auto-start (the moment an opponent
+-- joins) cancels every handle before any of them can fire.
 local TIMER_SECONDS = 15
 local COUNTDOWN_POINTS = {
     { at = 5,  remaining = 10 },
@@ -58,10 +66,9 @@ local function announce(template, ...)
     end
 end
 
--- Internal helper: emit a localised, formatted line to the host's chat frame
--- ONLY. Never broadcast. Single sink via `ns.PrintLocal` (see Core.lua);
--- falls through to `print` only when the seam is missing (defensive - this
--- should never happen at runtime, but keeps headless smoke tests honest).
+-- Internal helper: emit a localised, formatted line to the host's chat
+-- frame ONLY. Never broadcast. Single sink via `ns.PrintLocal`; falls
+-- through to `print` only when the seam is missing.
 local function tellHost(template, ...)
     local L = ns.L
     local resolved = L and L[template] or template
@@ -69,8 +76,8 @@ local function tellHost(template, ...)
     if ns.PrintLocal then ns.PrintLocal(resolved) else print(resolved) end
 end
 
--- Alias: `warn` is the legacy name for invalid-roll severity; same routing
--- as `tellHost`, separate name to preserve call-site intent.
+-- Alias: `warn` is the legacy name for invalid-roll severity; same
+-- routing as `tellHost`, separate name to preserve call-site intent.
 local warn = tellHost
 
 -- FSM transitions.
@@ -109,16 +116,16 @@ end
 
 -- Lobby-timer fields. The lobby-identity counter is the load-bearing
 -- re-entrancy guard: every Schedule callback captures the open-time value
--- and bails on mismatch, so a late callback from a cancelled lobby is inert
--- even if its handle was not cancelled in time (epoch / generation counter
--- pattern).
+-- and bails on mismatch, so a late callback from a cancelled lobby is
+-- inert even if its handle was not cancelled in time (epoch / generation
+-- counter pattern).
 M._timerHandle = nil
 M._countdownHandles = {}
 M._lobbyId = 0
 
 -- Internal helper: cancel any scheduled countdown announcements and the
--- terminal transition. Idempotent. The lobby-identity guard makes a missed
--- cancel safe-by-default, so this is best-effort cleanup, not the
+-- terminal transition. Idempotent. The lobby-identity guard makes a
+-- missed cancel safe-by-default, so this is best-effort cleanup, not the
 -- correctness primitive.
 local function cancelTimers()
     local handles = M._countdownHandles
@@ -159,27 +166,52 @@ local function slotForPlayer(player)
     return nil
 end
 
+---Parse the post-game tail of an `open` invocation into the args table the
+---game's :Open method consumes. Pure: no state mutation, no I/O. Mirrors
+---the shape used by every game module so the registry can dispatch
+---uniformly.
+---@param rest string|nil
+---@return { bet: integer }|nil args
+---@return string|nil           err   localised error template on failure.
+function M.ParseOpenArgs(rest)
+    if type(rest) ~= "string" then
+        return nil, "DragonDice: amount must be a positive integer."
+    end
+    local trimmed = string_match(rest, "^%s*(.-)%s*$") or ""
+    if trimmed == "" then
+        return nil, "DragonDice: amount must be a positive integer."
+    end
+    local n = tonumber(trimmed)
+    if n == nil or n ~= math_floor(n) or n <= 0 then
+        return nil, "DragonDice: amount must be a positive integer."
+    end
+    return { bet = n }, nil
+end
+
 ---@param _addon DragonCore.Addon
 function M:Init(_addon)
     state.fsm = ns.FSM.New("IDLE", TRANSITIONS)
 end
 
----Open a new lobby. Resets any prior game. Validates `bet` is a positive
----integer and `hostName` is a non-empty string; on failure prints a
----host-local error and does NOT mutate state.
+---Open a new lobby. Resets any prior game. Validates the parsed args and
+---`hostName`; on failure prints a host-local error and does NOT mutate
+---state.
 ---
 ---`hostName` is REQUIRED and is treated as opaque player-name data. The
----caller is responsible for translating "the local player" (Slash) or the
----chat sender (Chat for `!bet`) into a name before invoking this. Game
----never touches `UnitName` itself - host identity is data, not implicit.
----@param bet number
----@param hostName string  Opaque player-name string; run through Ambiguate.
-function M:Open(bet, hostName)
+---caller (Registry) is responsible for translating "the local player"
+---(Slash) or the chat sender (Chat) into a name before invoking this.
+---Deathroll never touches `UnitName` itself - host identity is data, not
+---implicit.
+---@param args     { bet: integer }
+---@param hostName string                Opaque player-name string.
+---@return boolean
+function M:Open(args, hostName)
     -- Guard against re-Init missed in tests / reload edge cases.
     if not state.fsm then state.fsm = ns.FSM.New("IDLE", TRANSITIONS) end
 
-    if type(bet) ~= "number" or bet ~= math.floor(bet) or bet <= 0 then
-        tellHost("DragonDice: bet must be a positive integer.")
+    local bet = type(args) == "table" and args.bet or nil
+    if type(bet) ~= "number" or bet ~= math_floor(bet) or bet <= 0 then
+        tellHost("DragonDice: amount must be a positive integer.")
         return false
     end
 
@@ -207,12 +239,12 @@ function M:Open(bet, hostName)
     announce("DragonDice: %s opens a %dg deathroll. Type !join to accept (lobby expires in %ds).",
         resolvedHost, bet, TIMER_SECONDS)
 
-    -- Arm the expiry countdown. Bumping the epoch here ensures any straggler
-    -- callbacks from a prior lobby (e.g. a Cancel that did not finish
-    -- cancelling its handles in time) observe a mismatched lobbyId and
-    -- no-op. The timer's sole purpose is cancelling an un-joined lobby back
-    -- to IDLE; a successful Join cancels every handle via Start->cancelTimers
-    -- before any of them can fire.
+    -- Arm the expiry countdown. Bumping the epoch here ensures any
+    -- straggler callbacks from a prior lobby (e.g. a Cancel that did not
+    -- finish cancelling its handles in time) observe a mismatched
+    -- lobbyId and no-op. The timer's sole purpose is cancelling an
+    -- un-joined lobby back to IDLE; a successful Join cancels every
+    -- handle via Start->cancelTimers before any of them can fire.
     M._lobbyId = M._lobbyId + 1
     local lobbyId = M._lobbyId
     scheduleCountdown(lobbyId)
@@ -232,7 +264,7 @@ end
 ---Accept a !join from `player`. Only legal in OPEN state, ignores host
 ---self-join, silently rejects any further joiners after the first. On the
 ---first successful join, transitions OPEN -> ACTIVE synchronously via
----Game:Start (auto-start; there is no separate manual-start verb).
+---:Start (auto-start; there is no separate manual-start verb).
 ---@param player string
 function M:Join(player)
     if state.fsm == nil or state.fsm:Get() ~= "OPEN" then return false end
@@ -246,25 +278,25 @@ function M:Join(player)
     return self:Start()
 end
 
----Begin the match. Requires OPEN + opponent set. Reached on the auto-start
----path from Game:Join; kept public as the FSM-transition implementation and
----test seam, not as a user-facing command.
+---Begin the match. Requires OPEN + opponent set. Reached on the auto-
+---start path from :Join; kept public as the FSM-transition implementation
+---and test seam, not as a user-facing command.
 function M:Start()
     if state.fsm == nil or state.fsm:Get() ~= "OPEN" then
         tellHost("DragonDice: cannot start - no game is open.")
         return false
     end
     if state.opponent == nil then
-        -- Defensive: Join sets the opponent before delegating here, so this
-        -- branch is reachable only via the test seam. Host-local notice, no
-        -- broadcast, no state mutation.
+        -- Defensive: Join sets the opponent before delegating here, so
+        -- this branch is reachable only via the test seam. Host-local
+        -- notice, no broadcast, no state mutation.
         tellHost("DragonDice: cannot start - need an opponent.")
         return false
     end
 
-    -- Auto-start: silence the expiry countdown before announcing the match.
-    -- The epoch guard would make stragglers inert anyway, but explicit
-    -- cancel keeps chat quiet.
+    -- Auto-start: silence the expiry countdown before announcing the
+    -- match. The epoch guard would make stragglers inert anyway, but
+    -- explicit cancel keeps chat quiet.
     cancelTimers()
 
     state.fsm:To("ACTIVE")
@@ -301,8 +333,8 @@ function M:OnRoll(record)
     end
 
     if minN ~= 1 or maxN ~= state.currentMax then
-        -- Range mismatch: obvious game-impact (player rolled a wrong /roll
-        -- range). Surface to the host. State NOT mutated.
+        -- Range mismatch: obvious game-impact (player rolled a wrong
+        -- /roll range). Surface to the host. State NOT mutated.
         warn("DragonDice: %s rolled wrong range 1-%d (expected 1-%d) - roll discarded.",
             shortName(player), maxN, state.currentMax)
         return false
@@ -337,9 +369,8 @@ function M:OnRoll(record)
     return true
 end
 
----Print the current game state to the host's chat frame. Host-local only;
----never broadcast.
----@return nil
+---Print the current game state to the host's chat frame. Host-local
+---only; never broadcast.
 function M:Status()
     if state.fsm == nil then
         tellHost("DragonDice: no game in progress.")
@@ -357,8 +388,8 @@ function M:Status()
 end
 
 ---Reset to IDLE silently (host-local; no broadcast). Advances the lobby
----epoch so any in-flight scheduled callbacks observe a stale id and no-op.
----@return nil
+---epoch so any in-flight scheduled callbacks observe a stale id and
+---no-op.
 function M:Reset()
     M._lobbyId = M._lobbyId + 1
     cancelTimers()
@@ -366,8 +397,8 @@ function M:Reset()
     clearState()
 end
 
----Cancel the active/open game and broadcast the cancellation. No-ops (and
----emits a host-local "no game in progress") when already IDLE.
+---Cancel the active/open game and broadcast the cancellation. No-ops
+---(and emits a host-local "no game in progress") when already IDLE.
 ---@return boolean  true if a game was cancelled; false if there was nothing to cancel.
 function M:Cancel()
     if state.fsm == nil then return false end
@@ -376,8 +407,9 @@ function M:Cancel()
         tellHost("DragonDice: no game in progress.")
         return false
     end
-    -- `state.host` is always set in non-IDLE states (set by :Open). Treated
-    -- as opaque player-name data; never substituted with UnitName("player").
+    -- `state.host` is always set in non-IDLE states (set by :Open).
+    -- Treated as opaque player-name data; never substituted with
+    -- UnitName("player").
     local hostName = state.host
     M._lobbyId = M._lobbyId + 1
     cancelTimers()
@@ -387,8 +419,7 @@ function M:Cancel()
     return true
 end
 
----Return the current FSM state, or nil if Init has not yet run. Callers
----use this to gate inputs (e.g. Chat silently drops "!bet" outside IDLE).
+---Return the current FSM state, or nil if Init has not yet run.
 ---@return "IDLE" | "OPEN" | "ACTIVE" | "FINISHED" | nil
 function M:GetState()
     if state.fsm == nil then return nil end
@@ -396,8 +427,7 @@ function M:GetState()
 end
 
 ---Return the current host name (short form), or nil if no game is in
----progress. Callers use this to authorise destructive slash verbs (only
----the host may /dr cancel | reset a non-IDLE game).
+---progress. The registry uses this to authorise destructive verbs.
 ---@return string | nil
 function M:GetHost()
     return state.host
@@ -416,10 +446,11 @@ function M._State()
     }
 end
 
--- Schedule the five countdown announcements for this lobby. Each callback
--- closes over `lobbyId` (captured at Open time) and refuses to fire if the
--- epoch has advanced. The handles are stored in `M._countdownHandles` so
--- cancelTimers() can sweep them on manual start / cancel / reset.
+-- Schedule the five countdown announcements for this lobby. Each
+-- callback closes over `lobbyId` (captured at Open time) and refuses to
+-- fire if the epoch has advanced. The handles are stored in
+-- `M._countdownHandles` so cancelTimers() can sweep them on
+-- auto-start / cancel / reset.
 scheduleCountdown = function(lobbyId)
     local Schedule = ns.Schedule
     if not Schedule or not Schedule.After then return end
@@ -445,10 +476,18 @@ expireInsufficient = function()
 end
 
 -- Test seams (NOT used in production): introspect the internal countdown
--- table and trigger the expiry path directly for spec coverage.
+-- table and the lobby epoch for spec coverage.
 function M._CountdownHandles() return M._countdownHandles end
 function M._LobbyId() return M._lobbyId end
 
-ns.Game = setmetatable(M, { __index = ns.Game or {} })
+-- Self-register on the registry. Conditional on Registry being loaded so
+-- a spec that loads this module without a registry (rare) does not
+-- crash; in production the TOC orders Registry before this file.
+if ns.Registry and ns.Registry.Register then
+    ns.Registry:Register(M)
+else
+    ns.Games = ns.Games or {}
+    ns.Games[M.id] = M
+end
 
 return M

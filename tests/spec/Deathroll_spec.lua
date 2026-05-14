@@ -1,8 +1,9 @@
 -------------------------------------------------------------------------------
--- Game_spec.lua
--- DragonDice Game: host-identity contract plus the lobby expiry-timer
+-- Deathroll_spec.lua
+-- DragonDice deathroll: host-identity contract plus the lobby expiry-timer
 -- mechanics (scheduling on Open, auto-start on Join, re-entrancy guard,
--- zero-joiner expiry). Broader game flow lives in in-game verification.
+-- zero-joiner expiry), plus ParseOpenArgs coverage absorbed from the
+-- retired BetParser spec. Broader game flow lives in in-game verification.
 -------------------------------------------------------------------------------
 
 package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
@@ -25,7 +26,7 @@ local function newFakeSchedule()
     return fake
 end
 
-describe("Game", function()
+describe("Deathroll", function()
     local Game
     local ns
     local fakeSchedule
@@ -48,6 +49,7 @@ describe("Game", function()
         ns = {}
         loader.load("Modules/FSM.lua", ns)
         loader.load("Modules/Announce.lua", ns)
+        loader.load("Modules/Registry.lua", ns)
         -- Stub announce so the spec does not require SendChatMessage.
         ns.Announce = ns.Announce or {}
         ns.Announce.Send = function(text)
@@ -66,7 +68,8 @@ describe("Game", function()
         end
         ns.Schedule = fakeSchedule
 
-        Game = loader.load("Modules/Game.lua", ns)
+        loader.load("Modules/Games/Deathroll.lua", ns)
+        Game = ns.Games.deathroll
         Game:Init({})
     end)
 
@@ -76,22 +79,52 @@ describe("Game", function()
         _G.print = previousPrint
     end)
 
+    describe("ParseOpenArgs", function()
+        it("parses a positive integer into { bet = N }", function()
+            local args, err = Game.ParseOpenArgs("100")
+            assert.is_nil(err)
+            assert.same({ bet = 100 }, args)
+        end)
+
+        it("tolerates surrounding whitespace", function()
+            local args = Game.ParseOpenArgs("   50   ")
+            assert.same({ bet = 50 }, args)
+        end)
+
+        it("rejects zero, negative, fractional, and non-numeric input", function()
+            for _, input in ipairs({ "0", "-5", "1.5", "foo", "10g", "" }) do
+                local args, err = Game.ParseOpenArgs(input)
+                assert.is_nil(args)
+                assert.equals("DragonDice: amount must be a positive integer.", err)
+            end
+        end)
+
+        it("rejects non-string input", function()
+            local args, err = Game.ParseOpenArgs(nil)
+            assert.is_nil(args)
+            assert.is_string(err)
+            args, err = Game.ParseOpenArgs(42)
+            assert.is_nil(args)
+            assert.is_string(err)
+        end)
+    end)
+
     it("opens with the supplied host name (local-player case)", function()
-        assert.is_true(Game:Open(100, "LocalPlayer"))
+        assert.is_true(Game:Open({ bet = 100 }, "LocalPlayer"))
         assert.equals("LocalPlayer", Game:GetHost())
         assert.equals("OPEN", Game:GetState())
     end)
 
     it("opens with an arbitrary remote host when hostName is provided", function()
-        assert.is_true(Game:Open(250, "RemoteHost"))
+        assert.is_true(Game:Open({ bet = 250 }, "RemoteHost"))
         assert.equals("RemoteHost", Game:GetHost())
         assert.equals("OPEN", Game:GetState())
     end)
 
     it("rejects an omitted or empty hostName (no implicit local fallback)", function()
-        assert.is_false(Game:Open(100))
-        assert.is_false(Game:Open(100, ""))
-        assert.is_false(Game:Open(100, 42))
+        assert.is_false(Game:Open({ bet = 100 }))
+        assert.is_false(Game:Open({ bet = 100 }, ""))
+        assert.is_false(Game:Open({ bet = 100 }, 42))
         assert.is_nil(Game:GetHost())
         assert.equals("IDLE", Game:GetState())
     end)
@@ -101,20 +134,20 @@ describe("Game", function()
             assert.equals("short", kind)
             return name:match("^([^%-]+)") or name
         end
-        assert.is_true(Game:Open(10, "Cross-Tichondrius"))
+        assert.is_true(Game:Open({ bet = 10 }, "Cross-Tichondrius"))
         assert.equals("Cross", Game:GetHost())
     end)
 
     it("rejects invalid bets regardless of host", function()
-        assert.is_false(Game:Open(0, "RemoteHost"))
-        assert.is_false(Game:Open(-5, "RemoteHost"))
-        assert.is_false(Game:Open(1.5, "RemoteHost"))
-        assert.is_false(Game:Open("100", "RemoteHost"))
+        assert.is_false(Game:Open({ bet = 0 }, "RemoteHost"))
+        assert.is_false(Game:Open({ bet = -5 }, "RemoteHost"))
+        assert.is_false(Game:Open({ bet = 1.5 }, "RemoteHost"))
+        assert.is_false(Game:Open({ bet = "100" }, "RemoteHost"))
         assert.is_nil(Game:GetHost())
     end)
 
     it("rejects host self-join and leaves the lobby OPEN with timers intact", function()
-        Game:Open(100, "RemoteHost")
+        Game:Open({ bet = 100 }, "RemoteHost")
         local recordsBefore = #fakeSchedule.records
         local announcesBefore = #announceCalls
         assert.is_false(Game:Join("RemoteHost"))
@@ -131,7 +164,7 @@ describe("Game", function()
     end)
 
     it("accepts a different player joining a remote-host game", function()
-        Game:Open(100, "RemoteHost")
+        Game:Open({ bet = 100 }, "RemoteHost")
         assert.is_true(Game:Join("Joiner"))
     end)
 
@@ -149,14 +182,14 @@ describe("Game", function()
         end
 
         it("schedules five countdowns plus a terminal expiry on Open", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             assert.equals(6, #fakeSchedule.records)
             assert.same({ 5, 10, 12, 13, 14 }, countdownDelays(fakeSchedule.records))
             assert.equals(15, fakeSchedule.records[6].delay)
         end)
 
         it("auto-starts the moment an opponent joins and cancels every handle", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             assert.equals("OPEN", Game:GetState())
             local openAnnounceCount = #announceCalls
             assert.is_true(Game:Join("Joiner"))
@@ -174,7 +207,7 @@ describe("Game", function()
         end)
 
         it("silently rejects a second joiner; opponent and state unchanged", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             assert.is_true(Game:Join("Joiner"))
             local stateAfterJoin = Game:GetState()
             local opponentAfterJoin = Game._State().opponent
@@ -187,7 +220,7 @@ describe("Game", function()
         end)
 
         it("cancels all six handles and advances the lobby epoch on Cancel", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             local epoch = Game._LobbyId()
             assert.is_true(Game:Cancel())
             for i = 1, #fakeSchedule.records do
@@ -197,7 +230,7 @@ describe("Game", function()
         end)
 
         it("cancels all six handles on Reset", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             Game:Reset()
             for i = 1, #fakeSchedule.records do
                 assert.is_true(fakeSchedule.records[i].cancelled)
@@ -206,7 +239,7 @@ describe("Game", function()
         end)
 
         it("broadcasts the remaining-seconds string when a countdown fires", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             announceCalls = {} -- discard the open announcement
             -- Fire the third countdown (at=12s, remaining=3).
             fakeSchedule.records[3].cb()
@@ -215,17 +248,17 @@ describe("Game", function()
         end)
 
         it("makes stale countdown callbacks inert across Cancel+Open (re-entrancy)", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             local staleCallback = fakeSchedule.records[1].cb
             Game:Cancel()
-            Game:Open(200, "Host2")
+            Game:Open({ bet = 200 }, "Host2")
             announceCalls = {} -- discard all prior announcements
             staleCallback() -- belongs to the cancelled lobby's countdown
             assert.equals(0, #announceCalls)
         end)
 
         it("cancels the lobby back to IDLE when the terminal expiry fires with no joiner", function()
-            Game:Open(100, "Host")
+            Game:Open({ bet = 100 }, "Host")
             announceCalls = {}
             printLocalCalls = {}
             -- Fire the terminal callback (records[6] at 15s) WITHOUT any Join.
@@ -240,16 +273,17 @@ describe("Game", function()
                 printLocalCalls[1])
             -- Lobby is fully reset: a fresh Open succeeds and re-arms the
             -- timer, with no residual handles or stale state leaking in.
-            assert.is_true(Game:Open(50, "NextHost"))
+            assert.is_true(Game:Open({ bet = 50 }, "NextHost"))
             assert.equals("OPEN", Game:GetState())
             assert.equals("NextHost", Game:GetHost())
         end)
 
         it("emits the 'need an opponent' notice when Start is called directly without one", function()
-            -- Game:Start remains public as the FSM-transition test seam. The
-            -- production path reaches it only via Game:Join (which sets the
-            -- opponent first). Direct invocation without one must refuse.
-            Game:Open(100, "Host")
+            -- Game:Start remains public as the FSM-transition test seam.
+            -- The production path reaches it only via Game:Join (which
+            -- sets the opponent first). Direct invocation without one
+            -- must refuse.
+            Game:Open({ bet = 100 }, "Host")
             printLocalCalls = {}
             assert.is_false(Game:Start())
             assert.equals(1, #printLocalCalls)

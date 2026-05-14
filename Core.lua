@@ -62,7 +62,8 @@ ns.L = DragonCore.Locale:Get({ name = ADDON_NAME })
 ns.FSM = ns.FSM or {}
 ns.RollParser = ns.RollParser or {}
 ns.Announce = ns.Announce or {}
-ns.Game = ns.Game or {}
+ns.Registry = ns.Registry or {}
+ns.Games = ns.Games or {}
 ns.Chat = ns.Chat or {}
 ns.Slash = ns.Slash or {}
 
@@ -77,9 +78,13 @@ addon:OnReady(function()
         },
     })
 
-    -- Stateless modules (FSM, RollParser, Announce) have nothing to wire;
-    -- their tables expose pure functions ready to call.
-    if ns.Game.Init then ns.Game:Init(addon) end
+    -- Stateless modules (FSM, RollParser, Announce, Registry) have
+    -- nothing to wire; their tables expose pure functions ready to call.
+    -- Each registered game gets its Init pass before the routers wire
+    -- chat / slash dispatch.
+    for _, game in pairs(ns.Games) do
+        if game.Init then game:Init(addon) end
+    end
     if ns.Chat.Init then ns.Chat:Init(addon) end
     if ns.Slash.Init then ns.Slash:Init(addon) end
 end)

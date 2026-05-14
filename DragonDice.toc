@@ -35,10 +35,14 @@ Locale\enUS.lua
 # Pure modules (no DragonCore deps).
 Modules\FSM.lua
 Modules\RollParser.lua
-Modules\BetParser.lua
 Modules\Announce.lua
 
-# Stateful modules (depend on the pure ones above).
-Modules\Game.lua
+# Registry (depends on nothing; games self-register into it).
+Modules\Registry.lua
+
+# Games (self-register on load).
+Modules\Games\Deathroll.lua
+
+# Routers (depend on Registry).
 Modules\Chat.lua
 Modules\Slash.lua

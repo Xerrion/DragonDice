@@ -17,32 +17,34 @@ local DragonCore = LibStub("DragonCore-1.0")
 if not DragonCore or not DragonCore.Locale then return end
 
 DragonCore.Locale:Register({ name = ADDON_NAME }, "enUS", {
-    -- Slash help / errors.
-    ["DragonDice: usage: /dr open <bet> | status | reset | cancel"] = true,
-    ["DragonDice: bet must be a positive integer."] = true,
+    -- Slash + chat help / errors (shared).
+    ["DragonDice: usage: /dc <game> open <args> | status | cancel | reset | start"] = true,
+    ["DragonDice: registered games: %s."] = true,
+    ["DragonDice: usage: /dc %s open <args>"] = true,
+    ["DragonDice: unknown command '%s'. Try /dc for usage."] = true,
+    ["DragonDice: unknown verb '%s %s'. Try /dc for usage."] = true,
+    ["DragonDice: unknown game '%s'. Registered: %s."] = true,
+    ["DragonDice: amount must be a positive integer."] = true,
     ["DragonDice: cannot open - host name missing."] = true,
-    ["DragonDice: unknown command '%s'. Try /dr for usage."] = true,
+    ["DragonDice: a %s game is already in progress; /dc cancel first."] = true,
+    ["DragonDice: nothing to start."] = true,
+
+    -- Lifecycle (shared).
     ["DragonDice: cannot start - need an opponent."] = true,
     ["DragonDice: cannot start - no game is open."] = true,
     ["DragonDice: no game in progress."] = true,
     ["DragonDice: only the host (%s) may run that command."] = true,
+    ["DragonDice: lobby expires in %ds."] = true,
+    ["DragonDice: no one accepted - lobby expired."] = true,
+    ["(none)"] = true,
 
-    -- Lobby / match announcements (broadcast).
+    -- Deathroll-specific announces / status / warnings.
     ["DragonDice: %s opens a %dg deathroll. Type !join to accept (lobby expires in %ds)."] = true,
     ["DragonDice: %s vs %s for %dg. %s rolls first: /roll %d"] = true,
     ["DragonDice: %s rolled %d. %s, /roll %d"] = true,
     ["DragonDice: %s rolled 1 and loses. %s wins %dg. Loser pays the bet."] = true,
     ["DragonDice: %s cancelled the deathroll."] = true,
-    ["DragonDice: lobby expires in %ds."] = true,
-
-    -- Lobby auto-expiry (host-local; never broadcast).
-    ["DragonDice: no one accepted - lobby expired."] = true,
-
-    -- Status (local to host's chat frame).
     ["DragonDice status: state=%s host=%s opponent=%s bet=%dg currentMax=%d turn=%s"] = true,
-    ["(none)"] = true,
-
-    -- Local warnings (host's chat frame only; never broadcast, never mutate).
     ["DragonDice: ignored roll from %s (not a participant)."] = true,
     ["DragonDice: %s rolled out of turn (waiting on %s)."] = true,
     ["DragonDice: %s rolled wrong range 1-%d (expected 1-%d) - roll discarded."] = true,
