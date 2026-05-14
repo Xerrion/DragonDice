@@ -3,7 +3,7 @@
 -- DragonDice bootstrap. Wires the addon into DragonCore (Lifecycle, Locale,
 -- Store) and resolves the per-module Init pass on OnReady.
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...
@@ -34,9 +34,9 @@ end
 ns.Schedule = DragonCore.Schedule
 
 -- Public helper: short-form player name (strip realm) for cross-realm hosts.
--- Mirrors the orchestrator constraint of Ambiguate(name, "short") only; no
--- further normalisation. Returns nil for nil, non-string, or empty input so
--- callers get a single sentinel to check.
+-- Uses Ambiguate(name, "short") only; no further normalisation, so callers
+-- can compare names byte-for-byte across modules. Returns nil for nil,
+-- non-string, or empty input so callers get a single sentinel to check.
 ---@param name any
 ---@return string|nil
 function ns.GetShortName(name)

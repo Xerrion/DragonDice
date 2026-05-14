@@ -5,7 +5,7 @@
 -- this module calls Announce. No event subscriptions, no slash registration,
 -- no I/O beyond Announce.Send and the host-local warning helper.
 --
--- Per-roll rules (orchestrator-confirmed):
+-- Per-roll rules:
 --   * State must be ACTIVE.
 --   * Roller must be host or opponent.
 --   * Roller must be currentTurn.
@@ -18,7 +18,7 @@
 -- Payout is announcement-only: "<winner> wins <bet>g. Loser pays the bet."
 -- No trade automation.
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...
@@ -74,11 +74,7 @@ end
 -- as `tellHost`, separate name to preserve call-site intent.
 local warn = tellHost
 
--------------------------------------------------------------------------------
--- State
--------------------------------------------------------------------------------
-
--- FSM transitions. Keep in sync with the state diagram in the ADR.
+-- FSM transitions.
 local TRANSITIONS = {
     IDLE     = { OPEN = true },
     OPEN     = { ACTIVE = true, IDLE = true },     -- IDLE on cancel/reset
@@ -112,12 +108,11 @@ local function clearState()
     state.history = {}
 end
 
--- Lobby-timer fields. Owned by Game (B1 in the ADR). The lobby-identity
--- counter is the load-bearing re-entrancy guard: every Schedule callback
--- captures the open-time value and bails on mismatch, so a late callback
--- from a cancelled lobby is inert even if its handle was not cancelled in
--- time. See "Re-entrancy guard" in the join-timer ADR (epoch / generation
--- counter pattern).
+-- Lobby-timer fields. The lobby-identity counter is the load-bearing
+-- re-entrancy guard: every Schedule callback captures the open-time value
+-- and bails on mismatch, so a late callback from a cancelled lobby is inert
+-- even if its handle was not cancelled in time (epoch / generation counter
+-- pattern).
 M._timerHandle = nil
 M._countdownHandles = {}
 M._lobbyId = 0
@@ -170,10 +165,6 @@ local function slotForPlayer(player)
     if p == state.opponent then return "opponent" end
     return nil
 end
-
--------------------------------------------------------------------------------
--- Public API
--------------------------------------------------------------------------------
 
 ---@param _addon DragonCore.Addon
 function M:Init(_addon)
@@ -361,7 +352,9 @@ function M:OnRoll(record)
     return true
 end
 
----Print the current game state to the host's chat frame.
+---Print the current game state to the host's chat frame. Host-local only;
+---never broadcast.
+---@return nil
 function M:Status()
     if state.fsm == nil then
         tellHost("DragonDice: no game in progress.")
@@ -378,7 +371,9 @@ function M:Status()
         state.currentTurn or none)
 end
 
----Reset to IDLE silently (host-local; no broadcast).
+---Reset to IDLE silently (host-local; no broadcast). Advances the lobby
+---epoch so any in-flight scheduled callbacks observe a stale id and no-op.
+---@return nil
 function M:Reset()
     M._lobbyId = M._lobbyId + 1
     cancelTimers()
@@ -386,7 +381,9 @@ function M:Reset()
     clearState()
 end
 
----Cancel the active/open game and broadcast the cancellation.
+---Cancel the active/open game and broadcast the cancellation. No-ops (and
+---emits a host-local "no game in progress") when already IDLE.
+---@return boolean  true if a game was cancelled; false if there was nothing to cancel.
 function M:Cancel()
     if state.fsm == nil then return false end
     local current = state.fsm:Get()

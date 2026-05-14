@@ -9,7 +9,7 @@
 -- second locale is one entry; the function signature is the seam, the table
 -- is the implementation. MVP populates only enUS.
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...

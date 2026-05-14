@@ -5,13 +5,13 @@
 -- for any malformed input. Mirrors `RollParser.lua` in shape (data table +
 -- pure `Parse`) so a future locale or alias variation is a one-line add.
 --
--- Validation rules (orchestrator spec):
+-- Validation rules:
 --   * Amount must parse to a positive integer.
 --   * "!bet 0", "!bet -5", "!bet 1.5", "!bet foo", "!bet", "!bet  " all
 --     return nil. No public warning, no host-local warning -- callers are
 --     responsible for silent ignore.
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...

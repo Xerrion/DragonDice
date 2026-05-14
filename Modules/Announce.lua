@@ -4,14 +4,14 @@
 -- pure: it takes a group-state record and returns the channel name. The
 -- Send wrapper is the only impure surface (calls SendChatMessage).
 --
--- Selection priority (per ADR): INSTANCE_CHAT > RAID > PARTY > SAY.
+-- Selection priority: INSTANCE_CHAT > RAID > PARTY > SAY.
 --   * INSTANCE_CHAT when in an instance group (LFG / LFR / random BG / etc.)
 --   * RAID when in a raid (and not instance group)
 --   * PARTY when in a party (and not instance group, not raid)
 --   * SAY otherwise (solo / world). SAY has a 40-yard radius which is the
 --     correct fallback for a deathroll between two people next to each other.
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...

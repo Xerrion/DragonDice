@@ -7,7 +7,7 @@
 -- Keys are full English sentences. Adding a second locale is a pure data add
 -- in a sibling file (no code edits).
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME = ...

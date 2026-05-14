@@ -1,15 +1,13 @@
 --------------------------------------------------------------------------------
 -- Modules/Slash.lua
--- Owns SLASH_DRAGONDICE1 = "/dr" and a small verb dispatch table. Per ADR
--- decision D1 we roll our own dispatcher rather than ride DragonCore.Settings'
--- built-in `open`/`reset` verbs (semantic collision: our `open` opens a
--- lobby, not a panel).
+-- Owns SLASH_DRAGONDICE1 = "/dr" and a small verb dispatch table. The
+-- dispatcher is bespoke (rather than riding DragonCore.Settings' built-in
+-- `open`/`reset` verbs) because of a semantic collision: our `open` opens a
+-- lobby, not an options panel.
 --
--- Verbs (orchestrator-confirmed): open <bet>, start, status, reset, cancel.
--- The eventual options panel will get a sibling slash (e.g. /dropts) post-
--- MVP; we do not retrofit /dr to dual-purpose.
+-- Verbs: open <bet>, start, status, reset, cancel.
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...

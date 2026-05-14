@@ -15,10 +15,7 @@
 --   fsm:To(to)    -> boolean (transitions if legal; raises if illegal)
 --   fsm:Reset()   -> () (snaps back to `initial`)
 --
--- Revisit trigger: promote to DragonCore once a second consumer needs an FSM
--- with the same shape (per ADR section "FSM promotion trigger").
---
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...

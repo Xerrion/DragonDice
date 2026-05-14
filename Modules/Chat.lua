@@ -5,8 +5,8 @@
 -- "!join" or "!bet <amount>" (PARTY/PARTY_LEADER/RAID/RAID_LEADER/
 -- INSTANCE_CHAT/INSTANCE_CHAT_LEADER/SAY).
 --
--- Whisper is intentionally NOT subscribed (orchestrator decision):
--- chat commands from a whisper are rejected to keep the lobby in-channel.
+-- Whisper is intentionally NOT subscribed: chat commands from a whisper are
+-- rejected to keep the lobby in-channel.
 --
 -- `!bet <amount>` semantics: only processed when Game state is IDLE. The
 -- sender becomes the host (even when remote). Malformed amounts and
@@ -14,10 +14,9 @@
 -- never be amplified.
 --
 -- All event subscription routes through DragonCore.Listener -- a per-instance
--- unnamed Frame, taint-isolated by construction (workspace AGENTS.md "Known
--- Gotchas -> Ace3 AceEvent30Frame").
+-- unnamed Frame, taint-isolated by construction.
 --
--- Supported versions: Retail
+-- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
 
 local ADDON_NAME, ns = ...

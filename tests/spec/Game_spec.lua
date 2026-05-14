@@ -76,10 +76,6 @@ describe("Game", function()
         _G.print = previousPrint
     end)
 
-    -- ------------------------------------------------------------------
-    -- Host-identity contract (pre-timer behaviour; unchanged)
-    -- ------------------------------------------------------------------
-
     it("opens with the supplied host name (local-player case)", function()
         assert.is_true(Game:Open(100, "LocalPlayer"))
         assert.equals("LocalPlayer", Game:GetHost())
