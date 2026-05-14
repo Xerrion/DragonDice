@@ -42,6 +42,7 @@ Modules\Registry.lua
 
 # Games (self-register on load).
 Modules\Games\Deathroll.lua
+Modules\Games\Goldroll.lua
 
 # Routers (depend on Registry).
 Modules\Chat.lua

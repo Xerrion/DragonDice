@@ -48,4 +48,22 @@ DragonCore.Locale:Register({ name = ADDON_NAME }, "enUS", {
     ["DragonDice: ignored roll from %s (not a participant)."] = true,
     ["DragonDice: %s rolled out of turn (waiting on %s)."] = true,
     ["DragonDice: %s rolled wrong range 1-%d (expected 1-%d) - roll discarded."] = true,
+
+    -- Goldroll-specific announces / status / warnings.
+    ["DragonDice: %s opens a %dg gold roll. Type !join to enter."] = true,
+    ["DragonDice: %s joined the gold roll. (%d players)"] = true,
+    ["DragonDice: quorum reached - gold roll starts in %ds " ..
+        "(host: !dc goldroll start to begin now, /dc cancel to abort)."] = true,
+    ["DragonDice: gold roll starts in %ds."] = true,
+    ["DragonDice: %s started the gold roll early."] = true,
+    ["DragonDice: gold roll begins. All %d players: /roll %d"] = true,
+    ["DragonDice: %s rolled %d (%d/%d players done)."] = true,
+    ["DragonDice: %s already rolled this round - roll discarded."] = true,
+    ["DragonDice: tied on the %s end among %s. Tied players re-roll: /roll %d."] = true,
+    ["DragonDice: gold roll result: %s rolled %d, %s rolled %d. %s owes %s %dg."] = true,
+    ["DragonDice: %s cancelled the gold roll."] = true,
+    ["DragonDice: gold roll - no quorum, lobby expired."] = true,
+    ["DragonDice: wager must be a positive integer."] = true,
+    ["DragonDice: gold roll needs at least 2 players to start."] = true,
+    ["DragonDice gold roll status: state=%s host=%s wager=%dg participants=%d rolled=%d round=%d timer=%s"] = true,
 })
