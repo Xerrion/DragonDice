@@ -36,6 +36,8 @@ DragonCore.Locale:Register({ name = ADDON_NAME }, "enUS", {
     ["DragonDice: only the host (%s) may run that command."] = true,
     ["DragonDice: lobby expires in %ds."] = true,
     ["DragonDice: no one accepted - lobby expired."] = true,
+    ["DragonDice: ignored roll from %s (not a participant)."] = true,
+    ["DragonDice: %s rolled wrong range 1-%d (expected 1-%d) - roll discarded."] = true,
     ["(none)"] = true,
 
     -- Deathroll-specific announces / status / warnings.
@@ -45,9 +47,7 @@ DragonCore.Locale:Register({ name = ADDON_NAME }, "enUS", {
     ["DragonDice: %s rolled 1 and loses. %s wins %dg. Loser pays the bet."] = true,
     ["DragonDice: %s cancelled the deathroll."] = true,
     ["DragonDice status: state=%s host=%s opponent=%s bet=%dg currentMax=%d turn=%s"] = true,
-    ["DragonDice: ignored roll from %s (not a participant)."] = true,
     ["DragonDice: %s rolled out of turn (waiting on %s)."] = true,
-    ["DragonDice: %s rolled wrong range 1-%d (expected 1-%d) - roll discarded."] = true,
 
     -- Goldroll-specific announces / status / warnings.
     ["DragonDice: %s opens a %dg gold roll. Type !join to enter."] = true,

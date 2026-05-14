@@ -16,10 +16,8 @@
 local ADDON_NAME, ns = ...
 ns = ns or {}
 
-local print = print
 local pairs = pairs
 local type = type
-local string_format = string.format
 local table_concat = table.concat
 local table_sort = table.sort
 
@@ -28,14 +26,11 @@ local M = {}
 -- Game-id -> game module table. Modules self-register via Register at load.
 local _games = {}
 
--- Internal helper: route a localised, formatted line to the host's chat
--- frame. Mirrors the per-module `tellHost` shape; never broadcast.
-local function tellHost(template, ...)
-    local L = ns.L
-    local resolved = (L and L[template]) or template
-    if select("#", ...) > 0 then resolved = string_format(resolved, ...) end
-    if ns.PrintLocal then ns.PrintLocal(resolved) else print(resolved) end
-end
+-- Host-local sink: shared with the game modules via `ns.TellHost`
+-- (Core.lua). One implementation owns "localise + format + print"; the
+-- registry, the games, and any future router can route refusals through
+-- it without re-inventing the closure.
+local tellHost = ns.TellHost
 
 -- The fixed contract every game module must satisfy. Validated by Register.
 local CONTRACT_KEYS = {

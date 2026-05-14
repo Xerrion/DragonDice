@@ -38,7 +38,7 @@ body:
         - A-Chat
         - A-Slash
         - A-RollParser
-        - A-BetParser
+        - A-Registry
         - A-Announce
         - A-Locale
         - A-FSM

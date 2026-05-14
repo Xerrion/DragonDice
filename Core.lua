@@ -27,6 +27,21 @@ function ns.PrintLocal(text)
     end
 end
 
+-- Public helper: localised + formatted host-local print. The template is
+-- resolved through `ns.L` (DragonCore.Locale proxy) so callers pass the
+-- English sentence as the key and trust the proxy to substitute the
+-- active-locale value. Falls back to the literal template when the
+-- proxy is missing or has not yet registered the key. Routes through
+-- `ns.PrintLocal` so the same single sink owns delivery.
+---@param template string
+function ns.TellHost(template, ...)
+    if type(template) ~= "string" then return end
+    local L = ns.L
+    local resolved = (L and L[template]) or template
+    if select("#", ...) > 0 then resolved = resolved:format(...) end
+    ns.PrintLocal(resolved)
+end
+
 -- Expose DragonCore.Schedule on the private namespace so modules can call it
 -- without re-resolving LibStub. Keeps Modules/ load-order independent of the
 -- LibStub global presence (notably: pure-Lua headless tests inject their own

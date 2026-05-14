@@ -35,7 +35,6 @@
 local ADDON_NAME, ns = ...
 ns = ns or {}
 
-local print = print
 local pairs = pairs
 local string_format = string.format
 local string_match = string.match
@@ -79,12 +78,10 @@ local function announce(template, ...)
     end
 end
 
-local function tellHost(template, ...)
-    local L = ns.L
-    local resolved = (L and L[template]) or template
-    if select("#", ...) > 0 then resolved = string_format(resolved, ...) end
-    if ns.PrintLocal then ns.PrintLocal(resolved) else print(resolved) end
-end
+-- Host-local sink: aliased from the shared `ns.TellHost` (Core.lua) so
+-- both games and the registry share one implementation of "localise +
+-- format + print to default chat frame".
+local tellHost = ns.TellHost
 
 local warn = tellHost
 

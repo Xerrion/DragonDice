@@ -22,4 +22,21 @@ function M.load(path, ns)
     return mod, ns
 end
 
+---Install the Core.lua-provided `ns` helpers that production modules
+---capture at load time. Specs that load any module aliasing
+---`ns.TellHost` must call this BEFORE `loader.load` on that module.
+---Mirrors Core.lua's ns.TellHost: localise via `ns.L`, format with the
+---supplied args, route to `ns.PrintLocal`. Callers stub `ns.PrintLocal`
+---themselves so they can assert on what was printed.
+---@param ns table
+function M.installCoreHelpers(ns)
+    ns.TellHost = function(template, ...)
+        if type(template) ~= "string" then return end
+        local L = ns.L
+        local resolved = (L and L[template]) or template
+        if select("#", ...) > 0 then resolved = resolved:format(...) end
+        if ns.PrintLocal then ns.PrintLocal(resolved) end
+    end
+end
+
 return M

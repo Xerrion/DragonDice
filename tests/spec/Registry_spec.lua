@@ -66,6 +66,7 @@ describe("Registry", function()
         ns = {}
         ns.L = setmetatable({}, { __index = function(_, k) return k end })
         ns.PrintLocal = function(text) prints[#prints + 1] = text end
+        loader.installCoreHelpers(ns)
         Registry = loader.load("Modules/Registry.lua", ns)
     end)
 

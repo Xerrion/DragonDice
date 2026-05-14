@@ -2,8 +2,8 @@
 -- Deathroll_spec.lua
 -- DragonDice deathroll: host-identity contract plus the lobby expiry-timer
 -- mechanics (scheduling on Open, auto-start on Join, re-entrancy guard,
--- zero-joiner expiry), plus ParseOpenArgs coverage absorbed from the
--- retired BetParser spec. Broader game flow lives in in-game verification.
+-- zero-joiner expiry), plus ParseOpenArgs coverage. Broader game flow
+-- lives in in-game verification.
 -------------------------------------------------------------------------------
 
 package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
@@ -67,6 +67,7 @@ describe("Deathroll", function()
             printLocalCalls[#printLocalCalls + 1] = text
         end
         ns.Schedule = fakeSchedule
+        loader.installCoreHelpers(ns)
 
         loader.load("Modules/Games/Deathroll.lua", ns)
         Game = ns.Games.deathroll

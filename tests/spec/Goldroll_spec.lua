@@ -62,6 +62,7 @@ describe("Goldroll", function()
             printLocalCalls[#printLocalCalls + 1] = text
         end
         ns.Schedule = fakeSchedule
+        loader.installCoreHelpers(ns)
 
         loader.load("Modules/Games/Goldroll.lua", ns)
         Game = ns.Games.goldroll

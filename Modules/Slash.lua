@@ -48,15 +48,22 @@ local function localPlayerShortName()
     return ns.GetShortName(UnitName and UnitName("player") or nil)
 end
 
--- Internal helper: print the help listing. The "registered games" lines
--- enumerate via Registry:List so newly added games are listed without a
--- locale edit.
+-- Internal helper: print the help listing. The "registered games" line
+-- enumerates via Registry:List + Registry:Get(id).displayName so newly
+-- added games surface as their user-facing name without a locale edit.
 local function printHelp()
     tellHost("DragonDice: usage: /dc <game> open <args> | status | cancel | reset | start")
-    local ids = ns.Registry and ns.Registry:List() or {}
-    if #ids > 0 then
-        tellHost("DragonDice: registered games: %s.", table_concat(ids, ", "))
+    local Registry = ns.Registry
+    if Registry == nil then return end
+    local ids = Registry:List()
+    if #ids == 0 then return end
+    local names = {}
+    for i = 1, #ids do
+        local id = ids[i]
+        local game = Registry:Get(id)
+        names[i] = (game and game.displayName) or id
     end
+    tellHost("DragonDice: registered games: %s.", table_concat(names, ", "))
 end
 
 -- Global verbs: routed through Registry, which owns active-game derivation

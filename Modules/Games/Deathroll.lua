@@ -24,7 +24,6 @@
 local ADDON_NAME, ns = ...
 ns = ns or {}
 
-local print = print
 local string_format = string.format
 local string_match = string.match
 local tonumber = tonumber
@@ -66,15 +65,11 @@ local function announce(template, ...)
     end
 end
 
--- Internal helper: emit a localised, formatted line to the host's chat
--- frame ONLY. Never broadcast. Single sink via `ns.PrintLocal`; falls
--- through to `print` only when the seam is missing.
-local function tellHost(template, ...)
-    local L = ns.L
-    local resolved = L and L[template] or template
-    if select("#", ...) > 0 then resolved = string_format(resolved, ...) end
-    if ns.PrintLocal then ns.PrintLocal(resolved) else print(resolved) end
-end
+-- Host-local sink: localise the template via `ns.L`, format with the
+-- supplied args, and route to the player's default chat frame. Single
+-- shared implementation lives on `ns` (Core.lua); aliased locally so
+-- existing call sites read `tellHost("...")` without a namespace hop.
+local tellHost = ns.TellHost
 
 -- Alias: `warn` is the legacy name for invalid-roll severity; same
 -- routing as `tellHost`, separate name to preserve call-site intent.

@@ -19,7 +19,7 @@ body:
       label: Steps to Reproduce
       description: Numbered steps to trigger the bug
       placeholder: |
-        1. /dr challenge <player> <amount>
+        1. /dc deathroll open <amount>
         2. Accept with !join
         3. ...
     validations:
@@ -49,7 +49,7 @@ body:
         - A-Chat
         - A-Slash
         - A-RollParser
-        - A-BetParser
+        - A-Registry
         - A-Announce
         - A-Locale
         - A-FSM
