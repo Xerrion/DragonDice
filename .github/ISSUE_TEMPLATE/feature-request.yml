@@ -1,0 +1,56 @@
+name: Feature Request
+description: Suggest a new feature or improvement for DragonDice
+title: "[Feature]: "
+labels:
+  - C-Feature
+assignees:
+  - Xerrion
+body:
+  - type: textarea
+    id: problem-motivation
+    attributes:
+      label: Problem / Motivation
+      description: What problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the desired feature or API
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: Alternatives Considered
+      description: Other approaches you've considered
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which subsystem would this feature target?
+      options:
+        - A-Core
+        - A-Game
+        - A-Chat
+        - A-Slash
+        - A-RollParser
+        - A-BetParser
+        - A-Announce
+        - A-Locale
+        - A-FSM
+        - A-Tests
+        - A-Docs
+        - A-CI
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Examples, references, mockups
+    validations:
+      required: false
