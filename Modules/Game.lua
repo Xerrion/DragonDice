@@ -33,14 +33,13 @@ local M = {}
 -- share a single implementation. Aliased locally for hot-path readability.
 local shortName = ns.GetShortName
 
--- Lobby join-timer constants. `TIMER_SECONDS` is the fixed open-to-start
--- countdown (out-of-scope to make configurable per ADR). `MIN_PLAYERS` names
--- the auto-start floor; in the current 1v1 model it reduces to "opponent
--- slot is filled" but the constant earns its place for the eventual N-player
--- refactor. Countdown announcement schedule (seconds-elapsed -> remaining):
--- {5->10, 10->5, 12->3, 13->2, 14->1}; terminal transition at TIMER_SECONDS.
+-- Lobby expiry constants. `TIMER_SECONDS` is the fixed window during which
+-- an OPEN lobby will accept a !join; if it elapses with no joiner the lobby
+-- is cancelled back to IDLE. Countdown announcement schedule (seconds-
+-- elapsed -> remaining): {5->10, 10->5, 12->3, 13->2, 14->1}; terminal
+-- expiry at TIMER_SECONDS. Auto-start (the moment an opponent joins) cancels
+-- every handle before any of them can fire.
 local TIMER_SECONDS = 15
-local MIN_PLAYERS = 2
 local COUNTDOWN_POINTS = {
     { at = 5,  remaining = 10 },
     { at = 10, remaining = 5  },
@@ -116,12 +115,6 @@ end
 M._timerHandle = nil
 M._countdownHandles = {}
 M._lobbyId = 0
-
--- Internal helper: count current participants. In the 1v1 model this is 1
--- (host only) or 2 (host + opponent). Named for the future N-player refactor.
-local function countParticipants()
-    return state.opponent ~= nil and 2 or 1
-end
 
 -- Internal helper: cancel any scheduled countdown announcements and the
 -- terminal transition. Idempotent. The lobby-identity guard makes a missed
@@ -211,17 +204,35 @@ function M:Open(bet, hostName)
     state.currentMax = state.startMax
 
     state.fsm:To("OPEN")
-    -- Open-announce wording is from the joiner's perspective: the 15s
-    -- countdown does not arm until someone joins, but at that point the
-    -- "!start or wait %ds to begin" line is accurate.
-    announce("DragonDice: %s opens a %dg deathroll. Type !join to enter; !start or wait %ds to begin.",
+    announce("DragonDice: %s opens a %dg deathroll. Type !join to accept (lobby expires in %ds).",
         resolvedHost, bet, TIMER_SECONDS)
+
+    -- Arm the expiry countdown. Bumping the epoch here ensures any straggler
+    -- callbacks from a prior lobby (e.g. a Cancel that did not finish
+    -- cancelling its handles in time) observe a mismatched lobbyId and
+    -- no-op. The timer's sole purpose is cancelling an un-joined lobby back
+    -- to IDLE; a successful Join cancels every handle via Start->cancelTimers
+    -- before any of them can fire.
+    M._lobbyId = M._lobbyId + 1
+    local lobbyId = M._lobbyId
+    scheduleCountdown(lobbyId)
+
+    local Schedule = ns.Schedule
+    if Schedule and Schedule.After then
+        M._timerHandle = Schedule:After(TIMER_SECONDS, function()
+            if M._lobbyId ~= lobbyId then return end
+            M._timerHandle = nil
+            expireInsufficient()
+        end)
+    end
 
     return true
 end
 
 ---Accept a !join from `player`. Only legal in OPEN state, ignores host
----self-join, rejects any further joiners after the first.
+---self-join, silently rejects any further joiners after the first. On the
+---first successful join, transitions OPEN -> ACTIVE synchronously via
+---Game:Start (auto-start; there is no separate manual-start verb).
 ---@param player string
 function M:Join(player)
     if state.fsm == nil or state.fsm:Get() ~= "OPEN" then return false end
@@ -229,57 +240,31 @@ function M:Join(player)
 
     local who = shortName(player)
     if who == state.host then return false end
-    local previousOpponent = state.opponent
-    if previousOpponent ~= nil then return false end
+    if state.opponent ~= nil then return false end
 
     state.opponent = who
-    announce("DragonDice: %s has joined the deathroll vs %s. Host: /dr start to begin.",
-        who, state.host)
-
-    -- Arm the lobby countdown on the FIRST successful join. In the current
-    -- 1v1 model every accepted Join IS the first (Join rejects when the
-    -- opponent slot is already filled), so this guard is forward-compatible
-    -- scaffolding for an eventual N-player refactor. The epoch lives on the
-    -- countdown, not the lobby: bumping it here ensures any straggler
-    -- callbacks from a prior countdown are inert.
-    if not previousOpponent then
-        M._lobbyId = M._lobbyId + 1
-        local lobbyId = M._lobbyId
-        scheduleCountdown(lobbyId)
-
-        local Schedule = ns.Schedule
-        if Schedule and Schedule.After then
-            M._timerHandle = Schedule:After(TIMER_SECONDS, function()
-                if M._lobbyId ~= lobbyId then return end
-                M._timerHandle = nil
-                if countParticipants() >= MIN_PLAYERS then
-                    M:Start()
-                else
-                    expireInsufficient()
-                end
-            end)
-        end
-    end
-
-    return true
+    return self:Start()
 end
 
----Begin the match. Requires OPEN + opponent set.
+---Begin the match. Requires OPEN + opponent set. Reached on the auto-start
+---path from Game:Join; kept public as the FSM-transition implementation and
+---test seam, not as a user-facing command.
 function M:Start()
     if state.fsm == nil or state.fsm:Get() ~= "OPEN" then
         tellHost("DragonDice: cannot start - no game is open.")
         return false
     end
     if state.opponent == nil then
-        -- Manual-start refusal: keep the lobby OPEN and the join timer
-        -- running. The host can wait for a joiner or `/dr cancel`.
+        -- Defensive: Join sets the opponent before delegating here, so this
+        -- branch is reachable only via the test seam. Host-local notice, no
+        -- broadcast, no state mutation.
         tellHost("DragonDice: cannot start - need an opponent.")
         return false
     end
 
-    -- Successful manual start (or terminal-callback delegation): silence the
-    -- countdown before announcing the match. The epoch guard would make
-    -- stragglers inert anyway, but explicit cancel keeps chat quiet.
+    -- Auto-start: silence the expiry countdown before announcing the match.
+    -- The epoch guard would make stragglers inert anyway, but explicit
+    -- cancel keeps chat quiet.
     cancelTimers()
 
     state.fsm:To("ACTIVE")
@@ -402,9 +387,9 @@ function M:Cancel()
     return true
 end
 
----Return the current FSM state ("IDLE" | "OPEN" | "ACTIVE" | "FINISHED"),
----or nil if Init has not yet run. Callers use this to gate inputs (e.g.
----Chat silently drops "!bet" outside IDLE).
+---Return the current FSM state, or nil if Init has not yet run. Callers
+---use this to gate inputs (e.g. Chat silently drops "!bet" outside IDLE).
+---@return "IDLE" | "OPEN" | "ACTIVE" | "FINISHED" | nil
 function M:GetState()
     if state.fsm == nil then return nil end
     return state.fsm:Get()
@@ -412,7 +397,8 @@ end
 
 ---Return the current host name (short form), or nil if no game is in
 ---progress. Callers use this to authorise destructive slash verbs (only
----the host may /dr start | cancel | reset a non-IDLE game).
+---the host may /dr cancel | reset a non-IDLE game).
+---@return string | nil
 function M:GetHost()
     return state.host
 end
@@ -444,21 +430,17 @@ scheduleCountdown = function(lobbyId)
         local remaining = point.remaining
         local handle = Schedule:After(point.at, function()
             if M._lobbyId ~= lobbyId then return end
-            announce("DragonDice: starting in %ds.", remaining)
+            announce("DragonDice: lobby expires in %ds.", remaining)
         end)
         handles[#handles + 1] = handle
     end
 end
 
--- Terminal timer expiry path: insufficient participants. Host-local notice
+-- Terminal timer expiry path: no opponent ever joined. Host-local notice
 -- only, then return to IDLE. The new epoch from Reset() prevents any
 -- straggler countdown from firing into the dead lobby.
--- Defensive: only reached if a future N-player refactor arms the timer
--- before MIN_PLAYERS is met. In the current 1v1 model the timer only arms
--- after a successful Join, so at terminal time an opponent always exists
--- and the terminal callback delegates to Start instead.
 expireInsufficient = function()
-    tellHost("DragonDice: not enough players - lobby expired.")
+    tellHost("DragonDice: no one accepted - lobby expired.")
     M:Reset()
 end
 

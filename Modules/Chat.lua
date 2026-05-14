@@ -39,8 +39,8 @@ local GROUP_CHAT_EVENTS = {
 }
 
 -- Internal helper: trim leading/trailing whitespace and lowercase. Used to
--- detect bare-token commands (`!join`, `!start`) tolerantly (extra spaces /
--- case variants).
+-- detect bare-token commands (`!join`) tolerantly (extra spaces / case
+-- variants).
 local function normalisedToken(text)
     if type(text) ~= "string" then return nil end
     local trimmed = text:match("^%s*(.-)%s*$")
@@ -60,26 +60,17 @@ function M:Init(addon)
         end
     end))
 
-    -- Player-chat events: detect `!join`, `!start`, and `!bet <amount>` and
-    -- route to Game:Join / Game:Start / Game:Open. Sender (arg2 of CHAT_MSG_*)
-    -- is the host, joiner, or aspiring starter depending on the token.
+    -- Player-chat events: detect `!join` and `!bet <amount>` and route to
+    -- Game:Join / Game:Open. Sender (arg2 of CHAT_MSG_*) is the joiner or
+    -- the aspiring host depending on the token. The match auto-starts the
+    -- instant Game:Join records its single opponent; there is no separate
+    -- start verb.
     for i = 1, #GROUP_CHAT_EVENTS do
         local ev = GROUP_CHAT_EVENTS[i]
         addon:Track(listener:On(ev, function(msg, sender)
             local token = normalisedToken(msg)
             if token == "!join" then
                 ns.Game:Join(sender)
-                return
-            end
-            if token == "!start" then
-                -- Host-gated: only the current host's `!start` ends the
-                -- lobby early. Non-host `!start` is silently dropped (no
-                -- chat echo, no host-local print) per the ADR.
-                local senderShort = ns.GetShortName and ns.GetShortName(sender) or sender
-                local host = ns.Game.GetHost and ns.Game:GetHost() or nil
-                if host ~= nil and senderShort == host then
-                    ns.Game:Start()
-                end
                 return
             end
 

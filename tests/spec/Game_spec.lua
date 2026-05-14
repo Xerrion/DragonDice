@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
 -- Game_spec.lua
--- DragonDice Game: host-identity contract plus the lobby join-timer
--- mechanics (scheduling, cancellation, re-entrancy guard, insufficient-
--- participants expiry). Broader game flow lives in in-game verification.
+-- DragonDice Game: host-identity contract plus the lobby expiry-timer
+-- mechanics (scheduling on Open, auto-start on Join, re-entrancy guard,
+-- zero-joiner expiry). Broader game flow lives in in-game verification.
 -------------------------------------------------------------------------------
 
 package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
@@ -113,9 +113,21 @@ describe("Game", function()
         assert.is_nil(Game:GetHost())
     end)
 
-    it("rejects host self-join when host is remote", function()
+    it("rejects host self-join and leaves the lobby OPEN with timers intact", function()
         Game:Open(100, "RemoteHost")
+        local recordsBefore = #fakeSchedule.records
+        local announcesBefore = #announceCalls
         assert.is_false(Game:Join("RemoteHost"))
+        assert.equals("OPEN", Game:GetState())
+        assert.is_nil(Game._State().opponent)
+        -- No new schedule entries, no new announces.
+        assert.equals(recordsBefore, #fakeSchedule.records)
+        assert.equals(announcesBefore, #announceCalls)
+        -- And no handle has been cancelled by the rejected join.
+        for i = 1, #fakeSchedule.records do
+            assert.is_false(fakeSchedule.records[i].cancelled,
+                "record " .. i .. " must not be cancelled by a rejected self-join")
+        end
     end)
 
     it("accepts a different player joining a remote-host game", function()
@@ -128,11 +140,7 @@ describe("Game", function()
         assert.equals("IDLE", Game:GetState())
     end)
 
-    -- ------------------------------------------------------------------
-    -- Lobby join-timer mechanics
-    -- ------------------------------------------------------------------
-
-    describe("join timer", function()
+    describe("lobby timer", function()
         local function countdownDelays(records)
             local delays = {}
             -- All but the last record (terminal at 15s) are countdowns.
@@ -140,40 +148,46 @@ describe("Game", function()
             return delays
         end
 
-        it("schedules nothing on Open (timer arms on first Join)", function()
+        it("schedules five countdowns plus a terminal expiry on Open", function()
             Game:Open(100, "Host")
-            assert.equals(0, #fakeSchedule.records)
-        end)
-
-        it("schedules five countdowns plus a terminal transition on first Join", function()
-            Game:Open(100, "Host")
-            assert.is_true(Game:Join("Joiner"))
             assert.equals(6, #fakeSchedule.records)
             assert.same({ 5, 10, 12, 13, 14 }, countdownDelays(fakeSchedule.records))
             assert.equals(15, fakeSchedule.records[6].delay)
         end)
 
-        it("cancels all six handles when Start succeeds", function()
+        it("auto-starts the moment an opponent joins and cancels every handle", function()
             Game:Open(100, "Host")
-            Game:Join("Joiner")
-            assert.is_true(Game:Start())
+            assert.equals("OPEN", Game:GetState())
+            local openAnnounceCount = #announceCalls
+            assert.is_true(Game:Join("Joiner"))
+            assert.equals("ACTIVE", Game:GetState())
+            -- Exactly one auto-start announce on top of the open announce.
+            assert.equals(openAnnounceCount + 1, #announceCalls)
+            assert.equals(
+                "DragonDice: Host vs Joiner for 100g. Host rolls first: /roll 1000",
+                announceCalls[#announceCalls])
+            -- All six handles cancelled (countdown silenced).
             for i = 1, #fakeSchedule.records do
                 assert.is_true(fakeSchedule.records[i].cancelled,
-                    "record " .. i .. " should be cancelled")
+                    "record " .. i .. " should be cancelled on auto-start")
             end
         end)
 
-        it("schedules nothing and refuses Start when no opponent ever joins", function()
+        it("silently rejects a second joiner; opponent and state unchanged", function()
             Game:Open(100, "Host")
-            assert.is_false(Game:Start())
-            assert.equals(0, #fakeSchedule.records,
-                "Open must not schedule; Join was never called")
-            assert.equals("OPEN", Game:GetState())
+            assert.is_true(Game:Join("Joiner"))
+            local stateAfterJoin = Game:GetState()
+            local opponentAfterJoin = Game._State().opponent
+            local announcesAfterJoin = #announceCalls
+            assert.is_false(Game:Join("Third"))
+            assert.equals(stateAfterJoin, Game:GetState())
+            assert.equals(opponentAfterJoin, Game._State().opponent)
+            assert.equals("Joiner", Game._State().opponent)
+            assert.equals(announcesAfterJoin, #announceCalls)
         end)
 
         it("cancels all six handles and advances the lobby epoch on Cancel", function()
             Game:Open(100, "Host")
-            Game:Join("Joiner")
             local epoch = Game._LobbyId()
             assert.is_true(Game:Cancel())
             for i = 1, #fakeSchedule.records do
@@ -184,7 +198,6 @@ describe("Game", function()
 
         it("cancels all six handles on Reset", function()
             Game:Open(100, "Host")
-            Game:Join("Joiner")
             Game:Reset()
             for i = 1, #fakeSchedule.records do
                 assert.is_true(fakeSchedule.records[i].cancelled)
@@ -194,44 +207,48 @@ describe("Game", function()
 
         it("broadcasts the remaining-seconds string when a countdown fires", function()
             Game:Open(100, "Host")
-            Game:Join("Joiner")
-            announceCalls = {} -- discard the open + join announcements
+            announceCalls = {} -- discard the open announcement
             -- Fire the third countdown (at=12s, remaining=3).
             fakeSchedule.records[3].cb()
             assert.equals(1, #announceCalls)
-            -- announce() formats the template even when L is unbound, so
-            -- the resolved string carries the substituted seconds value.
-            assert.equals("DragonDice: starting in 3s.", announceCalls[1])
+            assert.equals("DragonDice: lobby expires in 3s.", announceCalls[1])
         end)
 
-        it("makes stale countdown callbacks inert across Cancel+Open+Join (re-entrancy)", function()
+        it("makes stale countdown callbacks inert across Cancel+Open (re-entrancy)", function()
             Game:Open(100, "Host")
-            Game:Join("Joiner")
             local staleCallback = fakeSchedule.records[1].cb
             Game:Cancel()
             Game:Open(200, "Host2")
-            Game:Join("Joiner2")
             announceCalls = {} -- discard all prior announcements
             staleCallback() -- belongs to the cancelled lobby's countdown
             assert.equals(0, #announceCalls)
         end)
 
-        -- --------------------------------------------------------------
-        -- Terminal callback delegation
-        -- --------------------------------------------------------------
-
-        it("delegates to Start when the terminal fires (opponent always set in 1v1)", function()
+        it("cancels the lobby back to IDLE when the terminal expiry fires with no joiner", function()
             Game:Open(100, "Host")
-            Game:Join("Joiner")
             announceCalls = {}
-            -- Fire the terminal callback (records[6] at 15s).
+            printLocalCalls = {}
+            -- Fire the terminal callback (records[6] at 15s) WITHOUT any Join.
             fakeSchedule.records[6].cb()
-            assert.equals("ACTIVE", Game:GetState())
-            -- Opening-turn broadcast goes through Announce.Send.
-            assert.equals(1, #announceCalls)
+            assert.equals("IDLE", Game:GetState())
+            assert.is_nil(Game:GetHost())
+            assert.is_nil(Game._timerHandle)
+            -- Exactly one host-local expiry notice, no broadcast.
+            assert.equals(0, #announceCalls)
+            assert.equals(1, #printLocalCalls)
+            assert.equals("DragonDice: no one accepted - lobby expired.",
+                printLocalCalls[1])
+            -- Lobby is fully reset: a fresh Open succeeds and re-arms the
+            -- timer, with no residual handles or stale state leaking in.
+            assert.is_true(Game:Open(50, "NextHost"))
+            assert.equals("OPEN", Game:GetState())
+            assert.equals("NextHost", Game:GetHost())
         end)
 
-        it("emits the existing 'need an opponent' notice on manual Start, not the expiry one", function()
+        it("emits the 'need an opponent' notice when Start is called directly without one", function()
+            -- Game:Start remains public as the FSM-transition test seam. The
+            -- production path reaches it only via Game:Join (which sets the
+            -- opponent first). Direct invocation without one must refuse.
             Game:Open(100, "Host")
             printLocalCalls = {}
             assert.is_false(Game:Start())

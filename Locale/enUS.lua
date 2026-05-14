@@ -18,7 +18,7 @@ if not DragonCore or not DragonCore.Locale then return end
 
 DragonCore.Locale:Register({ name = ADDON_NAME }, "enUS", {
     -- Slash help / errors.
-    ["DragonDice: usage: /dr open <bet> | start | status | reset | cancel"] = true,
+    ["DragonDice: usage: /dr open <bet> | status | reset | cancel"] = true,
     ["DragonDice: bet must be a positive integer."] = true,
     ["DragonDice: cannot open - host name missing."] = true,
     ["DragonDice: unknown command '%s'. Try /dr for usage."] = true,
@@ -28,16 +28,15 @@ DragonCore.Locale:Register({ name = ADDON_NAME }, "enUS", {
     ["DragonDice: only the host (%s) may run that command."] = true,
 
     -- Lobby / match announcements (broadcast).
-    ["DragonDice: %s opens a %dg deathroll. Type !join to enter; !start or wait %ds to begin."] = true,
-    ["DragonDice: %s has joined the deathroll vs %s. Host: /dr start to begin."] = true,
+    ["DragonDice: %s opens a %dg deathroll. Type !join to accept (lobby expires in %ds)."] = true,
     ["DragonDice: %s vs %s for %dg. %s rolls first: /roll %d"] = true,
     ["DragonDice: %s rolled %d. %s, /roll %d"] = true,
     ["DragonDice: %s rolled 1 and loses. %s wins %dg. Loser pays the bet."] = true,
     ["DragonDice: %s cancelled the deathroll."] = true,
-    ["DragonDice: starting in %ds."] = true,
+    ["DragonDice: lobby expires in %ds."] = true,
 
     -- Lobby auto-expiry (host-local; never broadcast).
-    ["DragonDice: not enough players - lobby expired."] = true,
+    ["DragonDice: no one accepted - lobby expired."] = true,
 
     -- Status (local to host's chat frame).
     ["DragonDice status: state=%s host=%s opponent=%s bet=%dg currentMax=%d turn=%s"] = true,

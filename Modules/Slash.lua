@@ -5,7 +5,7 @@
 -- `open`/`reset` verbs) because of a semantic collision: our `open` opens a
 -- lobby, not an options panel.
 --
--- Verbs: open <bet>, start, status, reset, cancel.
+-- Verbs: open <bet>, status, reset, cancel.
 --
 -- Supported clients: Retail, MoP Classic, Wrath Classic, Classic Era.
 --------------------------------------------------------------------------------
@@ -45,8 +45,8 @@ local function localPlayerShortName()
     return ns.GetShortName(UnitName and UnitName("player") or nil)
 end
 
--- Pure name-comparison gate for destructive verbs (start | cancel | reset).
--- Takes already-normalised short names. The IDLE-state bypass lives in the
+-- Pure name-comparison gate for destructive verbs (cancel | reset). Takes
+-- already-normalised short names. The IDLE-state bypass lives in the
 -- closure below; this function strictly answers "are these two names the
 -- same player?" Returns false when either name is nil so a missing host or
 -- a missing local player is never silently treated as a permission grant.
@@ -59,11 +59,11 @@ function M.CanPlayerAct(localPlayerName, hostName)
     return localPlayerName == hostName
 end
 
--- Internal helper: gate destructive verbs (start | cancel | reset) when a
--- game is in progress and the local player is not the host. Returns true
--- when the caller may proceed; emits a host-local warning and returns
--- false when blocked. IDLE (and pre-Init nil) games have no host yet, so
--- the gate opens.
+-- Internal helper: gate destructive verbs (cancel | reset) when a game is
+-- in progress and the local player is not the host. Returns true when the
+-- caller may proceed; emits a host-local warning and returns false when
+-- blocked. IDLE (and pre-Init nil) games have no host yet, so the gate
+-- opens.
 local function localPlayerMayActOnHostGame()
     local Game = ns.Game
     local fsmState = Game and Game.GetState and Game:GetState() or nil
@@ -87,10 +87,6 @@ local DISPATCH = {
         end
         ns.Game:Open(bet, localPlayerShortName())
     end,
-    start = function()
-        if not localPlayerMayActOnHostGame() then return end
-        ns.Game:Start()
-    end,
     status = function() ns.Game:Status() end,
     reset = function()
         if not localPlayerMayActOnHostGame() then return end
@@ -105,7 +101,7 @@ local DISPATCH = {
 local function handler(msg)
     local verb, rest = splitVerb(msg)
     if verb == nil then
-        tellHost("DragonDice: usage: /dr open <bet> | start | status | reset | cancel")
+        tellHost("DragonDice: usage: /dr open <bet> | status | reset | cancel")
         return
     end
     local fn = DISPATCH[verb]
