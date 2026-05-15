@@ -130,9 +130,10 @@ DragonDice ships only `enUS` today. Add a new locale by creating
 2. **Locale registration is post-Core.** `Locales/enUS.lua` loads after
    `Core.lua` because `Core.lua` resolves the locale proxy first. Keep the
    ordering in the TOC.
-3. **`DragonDice_Icon.tga` is referenced by the TOC but not yet generated.**
-   The TOC `## IconTexture` line points at `Interface\AddOns\DragonDice\DragonDice_Icon`
-   (no extension; WoW resolves `.tga` automatically). A 64x64 TGA is the
-   expected format; the PNG logos in `assets/` are for the README only.
+3. **In-game icon vs. README branding.** `DragonDice/DragonDice/DragonDice_Icon.tga`
+   (64x64) is the in-game icon, resolved by WoW from the TOC's
+   `## IconTexture: Interface\AddOns\DragonDice\DragonDice_Icon` line (no
+   extension). The PNG logos under `assets/` are README/branding only and
+   are not used in-game.
 4. **No trade automation.** Payouts are announcement-only by design - do not
    add `InitiateTrade` or `PickupContainerItem` calls.
