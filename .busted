@@ -3,7 +3,7 @@ return {
         lua = "lua",
     },
     default = {
-        ROOT = { "tests/spec" },
+        ROOT = { "spec/spec" },
         pattern = "_spec",
         verbose = true,
     },

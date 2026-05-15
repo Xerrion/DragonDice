@@ -1,11 +1,18 @@
-## Interface: 120005, 50503, 20505, 11508
+## Interface: 120005
+## Interface-Mists: 50503
+## Interface-BCC: 20505
+## Interface-Classic: 11508
 ## Title: DragonDice
 ## Notes: Chat-driven 1v1 deathroller. First DragonCore consumer.
 ## Author: Xerrion
 ## Version: @project-version@
-## X-Category: Miscellaneous
-## X-License: MIT
 ## SavedVariables: DragonDiceDB
+## Dependencies: DragonCore
+## X-Category: Miscellaneous
+## IconTexture: Interface\AddOns\DragonDice\DragonDice_Icon
+## X-License: MIT
+## X-Curse-Project-ID: TODO
+## X-Wago-ID: TODO
 
 # DragonCore library (vendored via submodule; expanded inline because WoW does
 # not support TOC-of-TOC includes)
@@ -30,7 +37,7 @@ Libs\DragonCore\Locales\enUS.lua
 Core.lua
 
 # Locale content (registered after Core resolves the proxy).
-Locale\enUS.lua
+Locales\enUS.lua
 
 # Pure modules (no DragonCore deps).
 Modules\FSM.lua

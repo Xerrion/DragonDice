@@ -1,0 +1,43 @@
+{
+    "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+    "runtime": {
+        "version": "Lua 5.1"
+    },
+    "workspace": {
+        "ignoreDir": [
+            "DragonDice/Libs",
+            ".release",
+            ".github",
+            "assets"
+        ],
+        "checkThirdParty": "Apply",
+        "library": [
+            "~/.config/lua-ls/vscode-wow-api/Annotations",
+            "/mnt/f/Repos/wow-addons/docs/retail/Helix",
+            "/mnt/f/Repos/wow-addons/docs/classic_mists/Helix",
+            "/mnt/f/Repos/wow-addons/docs/classic_anniversary/Helix",
+            "/mnt/f/Repos/wow-addons/docs/retail/Blizzard_ItemButton"
+        ]
+    },
+    "diagnostics": {
+        "enable": true,
+        "groupSeverity": {
+            "ambiguity": "Warning",
+            "duplicate": "Warning",
+            "global": "Warning",
+            "luadoc": "Warning",
+            "redefined": "Warning",
+            "strict": "Warning",
+            "strong": "Warning",
+            "type-check": "Warning",
+            "unbalanced": "Warning",
+            "unused": "Warning"
+        },
+        "libraryFiles": "Disable"
+    },
+    "type": {
+        "castNumberToInteger": true,
+        "weakUnionCheck": false,
+        "weakNilCheck": false
+    }
+}

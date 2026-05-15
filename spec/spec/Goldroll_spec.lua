@@ -5,7 +5,7 @@
 -- tie-break re-entry, and cancel/reset paths.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 -- Same fake-Schedule shape Deathroll_spec uses: records every After()
@@ -45,9 +45,9 @@ describe("Goldroll", function()
         fakeSchedule = newFakeSchedule()
 
         ns = {}
-        loader.load("Modules/FSM.lua", ns)
-        loader.load("Modules/Announce.lua", ns)
-        loader.load("Modules/Registry.lua", ns)
+        loader.load("DragonDice/Modules/FSM.lua", ns)
+        loader.load("DragonDice/Modules/Announce.lua", ns)
+        loader.load("DragonDice/Modules/Registry.lua", ns)
         ns.Announce = ns.Announce or {}
         ns.Announce.Send = function(text)
             announceCalls[#announceCalls + 1] = text
@@ -64,7 +64,7 @@ describe("Goldroll", function()
         ns.Schedule = fakeSchedule
         loader.installCoreHelpers(ns)
 
-        loader.load("Modules/Games/Goldroll.lua", ns)
+        loader.load("DragonDice/Modules/Games/Goldroll.lua", ns)
         Game = ns.Games.goldroll
         Game:Init({})
     end)

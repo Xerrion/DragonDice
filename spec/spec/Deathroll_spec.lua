@@ -6,7 +6,7 @@
 -- lives in in-game verification.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 -- Build a fake DragonCore.Schedule that records scheduled callbacks instead
@@ -47,9 +47,9 @@ describe("Deathroll", function()
         fakeSchedule = newFakeSchedule()
 
         ns = {}
-        loader.load("Modules/FSM.lua", ns)
-        loader.load("Modules/Announce.lua", ns)
-        loader.load("Modules/Registry.lua", ns)
+        loader.load("DragonDice/Modules/FSM.lua", ns)
+        loader.load("DragonDice/Modules/Announce.lua", ns)
+        loader.load("DragonDice/Modules/Registry.lua", ns)
         -- Stub announce so the spec does not require SendChatMessage.
         ns.Announce = ns.Announce or {}
         ns.Announce.Send = function(text)
@@ -69,7 +69,7 @@ describe("Deathroll", function()
         ns.Schedule = fakeSchedule
         loader.installCoreHelpers(ns)
 
-        loader.load("Modules/Games/Deathroll.lua", ns)
+        loader.load("DragonDice/Modules/Games/Deathroll.lua", ns)
         Game = ns.Games.deathroll
         Game:Init({})
     end)

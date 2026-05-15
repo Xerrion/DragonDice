@@ -4,7 +4,7 @@
 -- malformed input, and routes through the locale-keyed PATTERNS table.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 describe("RollParser", function()
@@ -14,7 +14,7 @@ describe("RollParser", function()
     before_each(function()
         previousGetLocale = _G.GetLocale
         _G.GetLocale = function() return "enUS" end
-        RollParser = loader.load("Modules/RollParser.lua")
+        RollParser = loader.load("DragonDice/Modules/RollParser.lua")
         RollParser._ResetCache()
     end)
 

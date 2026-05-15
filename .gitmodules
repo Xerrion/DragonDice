@@ -1,3 +1,3 @@
-[submodule "Libs/DragonCore"]
-	path = Libs/DragonCore
+[submodule "DragonDice/Libs/DragonCore"]
+	path = DragonDice/Libs/DragonCore
 	url = git@github.com:Xerrion/DragonCore.git
