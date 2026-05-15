@@ -68,7 +68,7 @@ local addon = DragonCore.Lifecycle:Register(ADDON_NAME)
 ns.addon = addon
 
 -- Resolve the locale proxy eagerly. The proxy is stable across calls and
--- starts returning key-as-value until Locale\enUS.lua registers strings later
+-- starts returning key-as-value until Locales/enUS.lua registers strings later
 -- in the TOC -- both states are safe to read.
 ns.L = DragonCore.Locale:Get({ name = ADDON_NAME })
 
@@ -82,24 +82,56 @@ ns.Games = ns.Games or {}
 ns.Chat = ns.Chat or {}
 ns.Slash = ns.Slash or {}
 
+-- Internal helper: surface an init-time error to the player and the
+-- standard WoW error handler. We never swallow silently -- a failure in
+-- one phase must not leave the user staring at an unresponsive `/dc`
+-- with no diagnostic. The `geterrorhandler()` indirection routes through
+-- BugSack / Swatter / Blizzard's default UI error frame uniformly.
+local function reportInitError(phase, err)
+    local message = "DragonDice: init error in " .. phase .. ": " .. tostring(err)
+    ns.PrintLocal(message)
+    local handler = _G.geterrorhandler and _G.geterrorhandler() or nil
+    if type(handler) == "function" then handler(message) end
+end
+
 -- OnReady fires once, after PLAYER_LOGIN, with SavedVariables hydrated. We
--- open the Store first (so any module that wants it has it) then drive each
--- module's Init pass in dependency order.
+-- register the slash command first (so `/dc` always works as a diagnostic
+-- channel even if a later phase blows up), then open the Store, then drive
+-- each module's Init pass in dependency order. Every fallible phase is
+-- pcall-wrapped so one module's failure does not block the rest.
 addon:OnReady(function()
-    DragonCore.Store:Open(addon, {
-        savedVariable = "DragonDiceDB",
-        defaults = {
-            global = { version = 1, stats = {} },
-        },
-    })
+    -- Slash first: it is the user's only inspection lever if everything
+    -- else collapses. `Modules/Slash.lua` also registers at file-load
+    -- time; this call is a no-op safety net.
+    if ns.Slash.Init then
+        local ok, err = pcall(ns.Slash.Init, ns.Slash, addon)
+        if not ok then reportInitError("Slash:Init", err) end
+    end
+
+    local ok, err = pcall(function()
+        DragonCore.Store:Open(addon, {
+            savedVariable = "DragonDiceDB",
+            defaults = {
+                global = { version = 1, stats = {} },
+            },
+        })
+    end)
+    if not ok then reportInitError("Store:Open", err) end
 
     -- Stateless modules (FSM, RollParser, Announce, Registry) have
     -- nothing to wire; their tables expose pure functions ready to call.
     -- Each registered game gets its Init pass before the routers wire
-    -- chat / slash dispatch.
-    for _, game in pairs(ns.Games) do
-        if game.Init then game:Init(addon) end
+    -- chat dispatch. Per-game pcall isolation: one broken game must not
+    -- prevent the rest from initialising.
+    for id, game in pairs(ns.Games) do
+        if game.Init then
+            local gok, gerr = pcall(game.Init, game, addon)
+            if not gok then reportInitError("Games[" .. tostring(id) .. "]:Init", gerr) end
+        end
     end
-    if ns.Chat.Init then ns.Chat:Init(addon) end
-    if ns.Slash.Init then ns.Slash:Init(addon) end
+
+    if ns.Chat.Init then
+        local cok, cerr = pcall(ns.Chat.Init, ns.Chat, addon)
+        if not cok then reportInitError("Chat:Init", cerr) end
+    end
 end)

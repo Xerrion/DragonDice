@@ -5,14 +5,14 @@
 -- and is exercised lightly via a stub.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 describe("Announce", function()
     local Announce
 
     before_each(function()
-        Announce = loader.load("Modules/Announce.lua")
+        Announce = loader.load("DragonDice/Modules/Announce.lua")
     end)
 
     describe("PickChannel", function()

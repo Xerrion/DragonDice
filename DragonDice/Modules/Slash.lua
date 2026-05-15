@@ -16,20 +16,10 @@
 
 local ADDON_NAME, ns = ...
 
-local print = print
 local string_lower = string.lower
-local string_format = string.format
 local table_concat = table.concat
 
 local M = {}
-
--- Internal helper: surface a host-local message via L (no broadcast).
-local function tellHost(template, ...)
-    local L = ns.L
-    local resolved = L and L[template] or template
-    if select("#", ...) > 0 then resolved = string_format(resolved, ...) end
-    print(resolved)
-end
 
 -- Internal helper: split "verb rest" out of an input string. Empty input
 -- yields nil verb (caller prints usage). `rest` is left trimmed.
@@ -52,7 +42,7 @@ end
 -- enumerates via Registry:List + Registry:Get(id).displayName so newly
 -- added games surface as their user-facing name without a locale edit.
 local function printHelp()
-    tellHost("DragonDice: usage: /dc <game> open <args> | status | cancel | reset | start")
+    ns.TellHost("DragonDice: usage: /dc <game> open <args> | status | cancel | reset | start")
     local Registry = ns.Registry
     if Registry == nil then return end
     local ids = Registry:List()
@@ -63,7 +53,7 @@ local function printHelp()
         local game = Registry:Get(id)
         names[i] = (game and game.displayName) or id
     end
-    tellHost("DragonDice: registered games: %s.", table_concat(names, ", "))
+    ns.TellHost("DragonDice: registered games: %s.", table_concat(names, ", "))
 end
 
 -- Global verbs: routed through Registry, which owns active-game derivation
@@ -92,13 +82,13 @@ local function handler(msg)
     -- Otherwise `verb` is interpreted as a game id.
     local game = ns.Registry and ns.Registry:Get(verb) or nil
     if game == nil then
-        tellHost("DragonDice: unknown command '%s'. Try /dc for usage.", verb)
+        ns.TellHost("DragonDice: unknown command '%s'. Try /dc for usage.", verb)
         return
     end
 
     local subVerb, subRest = splitVerb(rest)
     if subVerb == nil then
-        tellHost("DragonDice: usage: /dc %s open <args>", verb)
+        ns.TellHost("DragonDice: usage: /dc %s open <args>", verb)
         return
     end
 
@@ -109,19 +99,35 @@ local function handler(msg)
 
     local fn = game.SlashVerbs and game.SlashVerbs[subVerb]
     if fn == nil then
-        tellHost("DragonDice: unknown verb '%s %s'. Try /dc for usage.", verb, subVerb)
+        ns.TellHost("DragonDice: unknown verb '%s %s'. Try /dc for usage.", verb, subVerb)
         return
     end
     fn(game, subRest, localPlayerShortName())
 end
 
----@param _addon DragonCore.Addon
-function M:Init(_addon)
-    -- The two SLASH_<NAME>N globals plus SlashCmdList[<NAME>] are the only
-    -- globals this addon writes besides DragonDiceDB.
+-- Internal helper: write the slash globals. Idempotent (re-runnable) so
+-- both the file-load path and Init can call it safely.
+local function registerSlash()
+    if type(_G.SlashCmdList) ~= "table" then return false end
     _G.SLASH_DRAGONDICE1 = "/dc"
     _G.SLASH_DRAGONDICE2 = "/dragondice"
     _G.SlashCmdList["DRAGONDICE"] = handler
+    return true
+end
+
+-- Register at file-load time. The slash globals must exist regardless of
+-- whether `OnReady` later succeeds; otherwise a failure deeper in the init
+-- chain (Store, game Init, Chat) would silently leave `/dc` undefined and
+-- the user with no way to inspect state. SlashCmdList is a Blizzard-owned
+-- global present from interface load; the guard keeps headless tests (which
+-- do not pre-seed it) from blowing up at module load.
+registerSlash()
+
+---@param _addon DragonCore.Addon
+function M:Init(_addon)
+    -- Belt-and-braces: re-run registration in case the file-load path
+    -- found SlashCmdList missing (e.g. an unusual harness). Idempotent.
+    registerSlash()
 end
 
 -- Test seam: invoke the slash handler directly. NOT used in production.

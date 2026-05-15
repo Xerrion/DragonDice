@@ -3,14 +3,14 @@
 -- DragonDice FSM helper: legal/illegal transitions, reset, can-checks.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 describe("FSM", function()
     local FSM
 
     before_each(function()
-        FSM = loader.load("Modules/FSM.lua")
+        FSM = loader.load("DragonDice/Modules/FSM.lua")
     end)
 
     local function newDeathrollFSM()

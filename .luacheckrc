@@ -2,9 +2,10 @@ std = "lua51"
 max_line_length = 120
 codes = true
 exclude_files = {
-    "Libs/",
+    "DragonDice/Libs/",
     ".release/",
     ".deliverables/",
+    ".types.lua",
 }
 
 ignore = {
@@ -46,7 +47,7 @@ globals = {
 -----------------------------------------------------------------------
 -- Tests
 -----------------------------------------------------------------------
-files["tests/"] = {
+files["spec/"] = {
     read_globals = {
         -- Busted DSL.
         "describe", "it", "before_each", "after_each", "setup", "teardown",

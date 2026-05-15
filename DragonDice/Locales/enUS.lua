@@ -1,5 +1,5 @@
 --------------------------------------------------------------------------------
--- Locale/enUS.lua
+-- Locales/enUS.lua
 -- DragonDice base locale. Workspace convention: enUS values are the boolean
 -- `true` sentinel; DragonCore.Locale normalises at the registration boundary
 -- so reads of `L["X"]` resolve to "X" without ever observing a `true`.

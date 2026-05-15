@@ -1,8 +1,12 @@
 package-as: DragonDice
-enable-toc-creation: no
+enable-toc-creation: yes
+manual-changelog: CHANGELOG.md
+
+move-folders:
+  DragonDice/DragonDice: DragonDice
 
 externals:
-  Libs/DragonCore: https://github.com/Xerrion/DragonCore
+  DragonDice/Libs/DragonCore: https://github.com/Xerrion/DragonCore
 
 ignore:
   - .editorconfig
@@ -11,7 +15,9 @@ ignore:
   - .luarc.json
   - .busted
   - "*.md"
-  - tests
+  - "!CHANGELOG.md"
+  - assets
+  - spec
   - AGENTS.md
   - release-please-config.json
   - .release-please-manifest.json

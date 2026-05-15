@@ -5,7 +5,7 @@
 -- (and with what arguments) every grammar shape resolves to.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 -- Build a Registry stub that records every call. Each call is a flat
@@ -29,25 +29,24 @@ end
 describe("Slash dispatcher", function()
     local Slash, ns, registry
     local prints
-    local previousUnitName, previousPrint
+    local previousUnitName
 
     before_each(function()
         previousUnitName = _G.UnitName
-        previousPrint = _G.print
         _G.UnitName = function() return "Me" end
         prints = {}
-        _G.print = function(text) prints[#prints + 1] = text end
 
         ns = {}
         ns.GetShortName = function(name) return name end
+        ns.PrintLocal = function(text) prints[#prints + 1] = text end
+        loader.installCoreHelpers(ns)
         registry = newRegistryStub()
         ns.Registry = registry
-        Slash = loader.load("Modules/Slash.lua", ns)
+        Slash = loader.load("DragonDice/Modules/Slash.lua", ns)
     end)
 
     after_each(function()
         _G.UnitName = previousUnitName
-        _G.print = previousPrint
     end)
 
     it("prints help on bare /dc", function()

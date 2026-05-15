@@ -5,7 +5,7 @@
 -- Slash), and the Open/Dispatch/Status routing surface.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 -- Minimal contract-conforming stub. State lives on the table itself so
@@ -67,7 +67,7 @@ describe("Registry", function()
         ns.L = setmetatable({}, { __index = function(_, k) return k end })
         ns.PrintLocal = function(text) prints[#prints + 1] = text end
         loader.installCoreHelpers(ns)
-        Registry = loader.load("Modules/Registry.lua", ns)
+        Registry = loader.load("DragonDice/Modules/Registry.lua", ns)
     end)
 
     describe("CanPlayerAct", function()

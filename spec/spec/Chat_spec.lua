@@ -7,7 +7,7 @@
 -- live addon, not in busted.
 -------------------------------------------------------------------------------
 
-package.path = package.path .. ";./tests/?.lua;./tests/support/?.lua"
+package.path = package.path .. ";./spec/?.lua;./spec/support/?.lua"
 local loader = require("support.loader")
 
 local function newRegistryStub()
@@ -48,7 +48,7 @@ describe("Chat dispatcher", function()
         -- Stub LibStub since Chat.lua references it at module load even
         -- though Init is never called here.
         _G.LibStub = function() return { Listener = { New = function() return {} end } } end
-        Chat = loader.load("Modules/Chat.lua", ns)
+        Chat = loader.load("DragonDice/Modules/Chat.lua", ns)
     end)
 
     after_each(function()

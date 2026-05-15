@@ -1,0 +1,219 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# DragonDice - Lua / WoW addon specific overrides.
+# Generic settings inherited from org-level .coderabbit.yaml
+
+language: en-US
+inheritance: true
+
+tone_instructions: >-
+  Review WoW addon Lua code. Focus on nil safety, global leaks, best practices,
+  event hygiene, and taint risks. Skip style - luacheck handles it.
+
+reviews:
+  profile: assertive
+  high_level_summary: true
+  poem: false
+  sequence_diagrams: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: true
+  auto_apply_labels: true
+  suggested_reviewers: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - WIP
+      - DO NOT MERGE
+    drafts: false
+
+  labeling_instructions:
+    - label: core
+      instructions: >-
+        Apply when the PR changes DragonDice/Core.lua -
+        DragonCore Lifecycle wiring, locale proxy resolution, Store open.
+    - label: modules
+      instructions: >-
+        Apply when the PR changes files under DragonDice/Modules/ that are not
+        under Modules/Games/ - pure helpers (FSM, RollParser, Announce),
+        the Registry, or the Chat / Slash routers.
+    - label: games
+      instructions: >-
+        Apply when the PR changes files under DragonDice/Modules/Games/ -
+        per-game state machines that self-register into the registry.
+    - label: ci
+      instructions: >-
+        Apply when the PR changes files under .github/ -
+        workflows, issue templates, or PR templates.
+    - label: localization
+      instructions: >-
+        Apply when the PR changes files under DragonDice/Locales/ -
+        translation tables for any language.
+    - label: tests
+      instructions: >-
+        Apply when the PR changes files under spec/ - busted specs or
+        the mock loader under spec/support/.
+
+  path_filters:
+    - "!DragonDice/Libs/**"
+    - "!**/node_modules/**"
+    - "!**/*.snap"
+
+  path_instructions:
+    - path: "DragonDice/Core.lua"
+      instructions: >-
+        Shell layer - wires DragonCore Lifecycle, resolves the locale proxy,
+        opens the Store. Review for correct DragonCore primitive usage
+        (Lifecycle:Register, Locale:Get, Store:Open), proper init ordering,
+        and SavedVariables (DragonDiceDB) schema correctness. All files use
+        `local ADDON_NAME, ns = ...` shared namespace.
+    - path: "DragonDice/Modules/FSM.lua"
+      instructions: >-
+        Pure finite-state-machine helper. No DragonCore dependencies; must
+        remain testable in plain Lua. Review for guarded transitions, no
+        global writes, and nil-safety on optional callbacks.
+    - path: "DragonDice/Modules/RollParser.lua"
+      instructions: >-
+        Pure parser for `/roll` chat lines. No DragonCore deps. Review for
+        correct Lua pattern escaping against localized RANDOM_ROLL_RESULT
+        GlobalString variants, and nil returns on unparseable input rather
+        than throwing.
+    - path: "DragonDice/Modules/Announce.lua"
+      instructions: >-
+        Pure announcement emitter. Routes lines to the active chat channel
+        (party / raid / instance / say) chosen by group state, never whisper.
+        Review for correct channel selection and no direct SendChatMessage
+        calls that bypass the channel chooser.
+    - path: "DragonDice/Modules/Registry.lua"
+      instructions: >-
+        Game registry. Games self-register into ns.Registry on load. Review
+        for collision handling (re-registration), stable iteration order,
+        and no Core changes required to add a new game.
+    - path: "DragonDice/Modules/Games/**/*.lua"
+      instructions: >-
+        Per-game modules. Each game self-registers into ns.Registry on load.
+        Review for FSM correctness (no illegal transitions), host-only verb
+        enforcement, cancellation paths, and proper use of ns.Schedule for
+        timers (must be cancellable on game end). Payouts are
+        announcement-only - never call InitiateTrade or PickupContainerItem.
+    - path: "DragonDice/Modules/Chat.lua"
+      instructions: >-
+        Chat router - listens for `!dc <verb>` in party / raid / instance /
+        say. Whispers are intentionally NOT accepted. Review for correct
+        CHAT_MSG_* event coverage, sender resolution via Ambiguate, and
+        delegation to Registry-dispatched verbs.
+    - path: "DragonDice/Modules/Slash.lua"
+      instructions: >-
+        Slash router - `/dc` and `/dragondice` long-form. Review for verb
+        dispatch matching the chat router so slash and chat behave
+        identically, and for usage text staying in sync with the registry.
+    - path: "DragonDice/Locales/**/*.lua"
+      instructions: >-
+        Localization tables registered through DragonCore.Locale
+        (AceLocale-3.0 compatible). Keys are full English sentences. Only
+        flag missing keys compared to enUS.lua or incorrect format string
+        placeholders (%s, %d, etc). Do not flag translation quality or grammar.
+    - path: "spec/**/*.lua"
+      instructions: >-
+        Busted specs and the mock loader under spec/support/. Review for
+        deterministic tests (no real timers, no real WoW globals beyond
+        what the loader mocks) and accurate coverage of the pure modules
+        and router layers.
+    - path: ".github/workflows/**/*.yml"
+      instructions: >-
+        CI workflows. Check for correct event triggers (pull_request_target
+        for lint, workflow_dispatch for packager), proper secret references,
+        and action version pinning. BigWigsMods packager workflow has
+        specific requirements - do not flag its patterns.
+    - path: "**/*.md"
+      instructions: >-
+        Documentation. Only flag broken links or factual errors.
+        Do not suggest rewording or restructuring prose.
+    - path: ".luacheckrc"
+      instructions: >-
+        Luacheck configuration. Review for correct globals declarations
+        and rule settings. Do not suggest adding rules for style preferences
+        already handled by project conventions.
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: >-
+        PR title must use Conventional Commit format: type(scope): description.
+        Valid types: feat, fix, refactor, docs, chore, ci, test, style, perf.
+
+  tools:
+    # -- Keep universal tools --
+    github-checks:
+      enabled: true
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+    actionlint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    languagetool:
+      enabled: false
+
+    # -- Disable: not a JS/TS/Python/Rust project --
+    biome:
+      enabled: false
+    eslint:
+      enabled: false
+    ruff:
+      enabled: false
+    flake8:
+      enabled: false
+    clippy:
+      enabled: false
+    hadolint:
+      enabled: false
+    swiftlint:
+      enabled: false
+    phpstan:
+      enabled: false
+    phpmd:
+      enabled: false
+    phpcs:
+      enabled: false
+    golangci-lint:
+      enabled: false
+    checkov:
+      enabled: false
+    tflint:
+      enabled: false
+    detekt:
+      enabled: false
+    fortitudeLint:
+      enabled: false
+    rubocop:
+      enabled: false
+    buf:
+      enabled: false
+    regal:
+      enabled: false
+    pmd:
+      enabled: false
+    clang:
+      enabled: false
+    cppcheck:
+      enabled: false
+    semgrep:
+      enabled: false
+    circleci:
+      enabled: false
