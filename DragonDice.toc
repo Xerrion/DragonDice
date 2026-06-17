@@ -1,4 +1,4 @@
-## Interface: 120005, 50503, 20505, 11508
+## Interface: 120007, 50503, 20505, 11508
 ## Title: DragonDice
 ## Notes: Chat-driven 1v1 deathroller. First DragonCore consumer.
 ## Author: Xerrion
